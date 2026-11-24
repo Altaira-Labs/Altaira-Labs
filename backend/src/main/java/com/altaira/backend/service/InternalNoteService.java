@@ -14,7 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
-/** Coordinates internal note operations in the backend. */
+/**
+ * Stores staff notes against either a sales enquiry or a customer account. Each list is scoped to its
+ * parent and ordered from newest note to oldest.
+ */
 @Service
 @Transactional
 public class InternalNoteService {
@@ -44,11 +47,11 @@ public class InternalNoteService {
     }
 
     /**
-     * Adds lead note. Persists changes through {@code internalNoteRepository}.
+     * Saves the note against the selected enquiry with its resolved author.
      *
      * @param leadId identifier of the source sales enquiry
-     * @param request input carrying create internal note
-     * @return the internal note response
+     * @param request note content and optional author
+     * @return the stored note on that enquiry
      * @throws com.altaira.backend.exception.LeadNotFoundException if the sales enquiry does not exist
      */
     public InternalNoteResponse addLeadNote(UUID leadId, CreateInternalNoteRequest request) {
@@ -64,10 +67,10 @@ public class InternalNoteService {
     }
 
     /**
-     * Retrieves lead notes. Looks up the referenced record by identifier.
+     * Lists internal staff notes associated with one sales enquiry.
      *
      * @param leadId identifier of the source sales enquiry
-     * @return the internal note response items
+     * @return the enquiry's notes, newest first
      * @throws com.altaira.backend.exception.LeadNotFoundException if the sales enquiry does not exist
      */
     public List<InternalNoteResponse> getLeadNotes(UUID leadId) {
@@ -81,11 +84,11 @@ public class InternalNoteService {
     }
 
     /**
-     * Adds client note. Persists changes through {@code internalNoteRepository}.
+     * Saves the note against the selected customer account with its resolved author.
      *
      * @param clientId identifier of the client whose workspace is in scope
-     * @param request input carrying create internal note
-     * @return the internal note response
+     * @param request note content and optional author
+     * @return the stored note on that customer
      */
     public InternalNoteResponse addClientNote(UUID clientId, CreateInternalNoteRequest request) {
         ClientEntity client = clientManagementService.findClientEntity(clientId);
@@ -99,10 +102,10 @@ public class InternalNoteService {
     }
 
     /**
-     * Retrieves client notes.
+     * Lists internal staff notes associated with one customer.
      *
      * @param clientId identifier of the client whose workspace is in scope
-     * @return the internal note response items
+     * @return the customer's notes, newest first
      */
     public List<InternalNoteResponse> getClientNotes(UUID clientId) {
         ClientEntity client = clientManagementService.findClientEntity(clientId);

@@ -13,7 +13,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
-/** HTTP endpoints for workspace task under {@code /api/v1/workspace-tasks}. */
+/**
+ * Exposes the staff task board and the customer's read-only task list under {@code
+ * /api/v1/workspace-tasks}. Staff can manage tasks and preview what a specific customer can see.
+ */
 @RestController
 @RequestMapping("/api/v1/workspace-tasks")
 @CrossOrigin(origins = {
@@ -48,11 +51,12 @@ public class WorkspaceTaskController {
     }
 
     /**
-     * GET {@code /api/v1/workspace-tasks/admin}. Lists for admin. Internal access is checked before delegation.
+     * GET {@code /api/v1/workspace-tasks/admin}.
+     * Lists work across customer accounts for the staff dashboard.
      *
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the workspace task response items
+     * @return tasks ordered by due date, with synthetic test accounts omitted
      */
     @GetMapping("/admin")
     public List<WorkspaceTaskResponse> listForAdmin(
@@ -64,12 +68,13 @@ public class WorkspaceTaskController {
     }
 
     /**
-     * GET {@code /api/v1/workspace-tasks/admin/clients/{clientId}/preview}. Lists for admin client preview. Internal access is checked before delegation.
+     * GET {@code /api/v1/workspace-tasks/admin/clients/{clientId}/preview}.
+     * Lets staff preview the task list visible to one customer.
      *
      * @param clientId identifier of the client whose workspace is in scope
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the workspace task response items
+     * @return only client-visible tasks belonging to the selected customer
      */
     @GetMapping("/admin/clients/{clientId}/preview")
     public List<WorkspaceTaskResponse> listForAdminClientPreview(
@@ -82,12 +87,13 @@ public class WorkspaceTaskController {
     }
 
     /**
-     * POST {@code /api/v1/workspace-tasks/admin}. Creates for admin. Internal access is checked before delegation.
+     * POST {@code /api/v1/workspace-tasks/admin}.
+     * Adds a task to a customer's workspace on behalf of an authorized administrator.
      *
-     * @param request input carrying create workspace task
+     * @param request target customer and initial task details
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the workspace task response
+     * @return the saved task with its visibility, owner role and deadline
      */
     @PostMapping("/admin")
     @ResponseStatus(HttpStatus.CREATED)
@@ -101,13 +107,14 @@ public class WorkspaceTaskController {
     }
 
     /**
-     * PATCH {@code /api/v1/workspace-tasks/admin/{taskId}}. Updates for admin. Internal access is checked before delegation.
+     * PATCH {@code /api/v1/workspace-tasks/admin/{taskId}}.
+     * Applies the submitted changes to a task in the staff workspace.
      *
      * @param taskId identifier of the task being acted on
-     * @param request input carrying update workspace task
+     * @param request task changes, including optional deadline removal
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the workspace task response
+     * @return the task after its changes have been saved
      */
     @PatchMapping("/admin/{taskId}")
     public WorkspaceTaskResponse updateForAdmin(
@@ -121,7 +128,8 @@ public class WorkspaceTaskController {
     }
 
     /**
-     * DELETE {@code /api/v1/workspace-tasks/admin/{taskId}}. Deletes for admin. Internal access is checked before delegation.
+     * DELETE {@code /api/v1/workspace-tasks/admin/{taskId}}.
+     * Deletes a task for an authorized administrator and returns HTTP 204.
      *
      * @param taskId identifier of the task being acted on
      * @param internalApiToken credential presented to the internal API boundary
@@ -139,10 +147,11 @@ public class WorkspaceTaskController {
     }
 
     /**
-     * GET {@code /api/v1/workspace-tasks/client/me}. Lists for client. Membership is checked before the workspace operation.
+     * GET {@code /api/v1/workspace-tasks/client/me}.
+     * Loads the task list associated with the authenticated customer's workspace.
      *
      * @param clientSessionToken session credential supplied for the client workspace
-     * @return the workspace task response items
+     * @return client-visible tasks, with undated tasks last
      */
     @GetMapping("/client/me")
     public List<WorkspaceTaskResponse> listForClient(
@@ -153,10 +162,13 @@ public class WorkspaceTaskController {
     }
 
     /**
-     * PATCH {@code /api/v1/workspace-tasks/client/{taskId}/status}. Updates status for client. Membership is checked before the workspace operation.
+     * PATCH {@code /api/v1/workspace-tasks/client/{taskId}/status}.
+     * Authenticates the client session and rejects direct task status changes with HTTP 403. Clients can
+     * submit a service-track suggestion for review.
      *
-     * @param taskId identifier of the task being acted on
+     * @param taskId task named in the rejected update
      * @param clientSessionToken session credential supplied for the client workspace
+     * @throws org.springframework.web.server.ResponseStatusException if the client session is rejected or direct modification is forbidden
      */
     @PatchMapping("/client/{taskId}/status")
     public void updateStatusForClient(

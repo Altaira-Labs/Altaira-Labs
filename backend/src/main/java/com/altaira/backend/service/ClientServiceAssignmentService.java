@@ -49,11 +49,12 @@ public class ClientServiceAssignmentService {
     }
 
     /**
-     * Looks up the customer and catalogue service and reuses their assignment when that pair already exists.
+     * Assigns a catalogue service to a customer. When the pairing already exists, nonblank status or notes
+     * update the existing assignment.
      *
      * @param clientId identifier of the client whose workspace is in scope
-     * @param request input carrying assign client service
-     * @return the client service response
+     * @param request catalogue service to assign, with optional status and notes
+     * @return the saved assignment for the customer and service
      */
     public ClientServiceResponse assignService(UUID clientId, AssignClientServiceRequest request) {
         ClientEntity client = clientManagementService.findClientEntity(clientId);
@@ -84,10 +85,10 @@ public class ClientServiceAssignmentService {
     }
 
     /**
-     * Lists the services attached to a particular customer, with the catalogue descriptions included.
+     * Lists the catalogue services assigned to an existing customer.
      *
      * @param clientId identifier of the client whose workspace is in scope
-     * @return the client service response items
+     * @return the customer's assignments, newest first
      */
     public List<ClientServiceResponse> getClientServices(UUID clientId) {
         ClientEntity client = clientManagementService.findClientEntity(clientId);
@@ -99,11 +100,11 @@ public class ClientServiceAssignmentService {
     }
 
     /**
-     * Finds the service assignment by its identifier, checks the requested status and returns the saved assignment.
+     * Changes the status of a single customer service assignment.
      *
      * @param id unique identifier of the record
      * @param status current state in the workflow
-     * @return the client service response
+     * @return the saved assignment with the parsed status
      * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
      */
     public ClientServiceResponse updateStatus(UUID id, String status) {

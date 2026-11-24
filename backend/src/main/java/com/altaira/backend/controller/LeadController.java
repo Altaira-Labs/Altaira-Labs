@@ -25,7 +25,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** HTTP endpoints for lead under {@code /api/v1/leads}. */
+/**
+ * Accepts incoming sales enquiries and exposes their assessment, status and conversion to staff under
+ * {@code /api/v1/leads}. The public intake and internal CRM routes have separate entry points.
+ */
 @RestController
 @RequestMapping("/api/v1/leads")
 @CrossOrigin(origins = {
@@ -103,12 +106,13 @@ public class LeadController {
     }
 
     /**
-     * GET {@code /api/v1/leads/{id}}. Retrieves lead by id. Internal access is checked before delegation.
+     * GET {@code /api/v1/leads/{id}}.
+     * Loads one sales enquiry for an authorized internal caller.
      *
-     * @param id unique identifier of the record
+     * @param id identifier of the sales enquiry
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return identifier of the lead by
+     * @return the enquiry's contact details, service interest and current status
      */
     @GetMapping("/{id}")
     public LeadResponse getLeadById(

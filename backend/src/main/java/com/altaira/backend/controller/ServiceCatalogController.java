@@ -13,7 +13,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
-/** HTTP endpoints for service catalog under {@code /api/v1/services}. */
+/**
+ * Staff endpoints under {@code /api/v1/services} for managing the catalogue of services that can be
+ * assigned to customer accounts.
+ */
 @RestController
 @RequestMapping("/api/v1/services")
 @CrossOrigin(origins = {
@@ -55,12 +58,13 @@ public class ServiceCatalogController {
     }
 
     /**
-     * GET {@code /api/v1/services/{id}}. Retrieves service by id. Internal access is checked before delegation.
+     * GET {@code /api/v1/services/{id}}.
+     * Loads one catalogue entry for an authorized internal caller.
      *
-     * @param id unique identifier of the record
+     * @param id identifier of the catalogue entry
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return identifier of the service by
+     * @return the service description, active flag and catalogue metadata
      */
     @GetMapping("/{id}")
     public ServiceResponse getServiceById(

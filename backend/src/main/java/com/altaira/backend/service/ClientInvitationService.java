@@ -32,7 +32,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
-/** Issue and accept single-use client invitations. Invitations are scoped, expiring and stored safely. */
+/**
+ * Issues and accepts expiring invitations to a customer workspace. Issuing another invitation for the
+ * same customer and email revokes unused predecessors. The stored hash is used to look up the token
+ * presented at acceptance.
+ */
 @Service
 @Transactional
 public class ClientInvitationService {
@@ -99,14 +103,15 @@ public class ClientInvitationService {
     }
 
     /**
-     * Creates an invitation tied to a client, email address and workspace role and returns the link used to accept it.
+     * Replaces outstanding invitations for the same customer and email, records the notification outcome
+     * and returns the new invitation.
      *
      * @param clientId identifier of the client whose workspace is in scope
-     * @param request input carrying create client invitation
+     * @param request invitation email and role for the selected customer
      * @param adminUser internal user performing the action
      * @param ipAddress network address associated with the request
      * @param userAgent client software reported by the HTTP request
-     * @return the client invitation response
+     * @return the new invitation with its acceptance URL and notification status
      */
     public ClientInvitationResponse createInvitation(UUID clientId, CreateClientInvitationRequest request, AppUserEntity adminUser, String ipAddress, String userAgent) {
         ClientEntity client = clientManagementService.findClientEntity(clientId);
@@ -146,10 +151,10 @@ public class ClientInvitationService {
     }
 
     /**
-     * Lists invitations.
+     * Lists the invitations recorded for the customer without reissuing their acceptance links.
      *
      * @param clientId identifier of the client whose workspace is in scope
-     * @return the client invitation response items
+     * @return invitation history in reverse creation order, with no acceptance URLs
      */
     @Transactional(readOnly = true)
     public List<ClientInvitationResponse> listInvitations(UUID clientId) {
@@ -163,11 +168,11 @@ public class ClientInvitationService {
     /**
      * Checks that passwords match and that the invitation is active. It creates or updates the client account and workspace membership before marking the invitation accepted.
      *
-     * @param request input carrying accept client invitation
+     * @param request invitation token and proposed password with its confirmation
      * @param ipAddress network address associated with the request
      * @param userAgent client software reported by the HTTP request
-     * @return the login response
-     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (bad request, not found, gone, conflict)
+     * @return the authenticated session for the user who accepted the invitation
+     * @throws org.springframework.web.server.ResponseStatusException if passwords differ, the invitation is unavailable, or the account belongs to an incompatible role or customer
      */
     public LoginResponse acceptInvitation(AcceptClientInvitationRequest request, String ipAddress, String userAgent) {
         if (!request.getPassword().equals(request.getConfirmPassword())) {

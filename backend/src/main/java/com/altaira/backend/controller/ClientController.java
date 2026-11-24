@@ -26,7 +26,11 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.UUID;
 
-/** HTTP endpoints for client under {@code /api/v1/clients}. */
+/**
+ * Staff endpoints for the customer directory under {@code /api/v1/clients}. They expose account
+ * details, service assignments, notes and invitations. Directory summaries combine the activity across
+ * these records for the staff dashboard.
+ */
 @RestController
 @RequestMapping("/api/v1/clients")
 @CrossOrigin(origins = {
@@ -75,11 +79,12 @@ public class ClientController {
     }
 
     /**
-     * GET {@code /api/v1/clients}. Returns all clients. Internal access is checked before delegation.
+     * GET {@code /api/v1/clients}.
+     * Lists customer accounts for an authorized internal caller.
      *
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the client response items
+     * @return customer accounts in reverse creation order
      */
     @GetMapping
     public List<ClientResponse> getAllClients(
@@ -91,11 +96,12 @@ public class ClientController {
     }
 
     /**
-     * GET {@code /api/v1/clients/admin-summaries}. Retrieves admin client summaries. Internal access is checked before delegation.
+     * GET {@code /api/v1/clients/admin-summaries}.
+     * Displays the staff delivery directory with synthetic test accounts omitted.
      *
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the admin client summary response items
+     * @return customer overviews with service, project and task indicators
      */
     @GetMapping("/admin-summaries")
     public List<AdminClientSummaryResponse> getAdminClientSummaries(
@@ -107,12 +113,13 @@ public class ClientController {
     }
 
     /**
-     * GET {@code /api/v1/clients/{id}/admin-summary}. Retrieves admin client summary. Internal access is checked before delegation.
+     * GET {@code /api/v1/clients/{id}/admin-summary}.
+     * Shows staff the delivery overview for one customer.
      *
-     * @param id unique identifier of the record
+     * @param id identifier of the customer whose delivery activity is requested
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return admin client summary
+     * @return the account's delivery state, next task when present and last activity
      */
     @GetMapping("/{id}/admin-summary")
     public AdminClientSummaryResponse getAdminClientSummary(
@@ -125,12 +132,13 @@ public class ClientController {
     }
 
     /**
-     * GET {@code /api/v1/clients/{id}}. Retrieves client by id. Internal access is checked before delegation.
+     * GET {@code /api/v1/clients/{id}}.
+     * Loads one customer's account for an authorized internal caller.
      *
-     * @param id unique identifier of the record
+     * @param id identifier of the customer to load
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return identifier of the client by
+     * @return the customer's contact details, sector, status and source enquiry when present
      */
     @GetMapping("/{id}")
     public ClientResponse getClientById(
@@ -143,12 +151,13 @@ public class ClientController {
     }
 
     /**
-     * POST {@code /api/v1/clients}. Creates client. Internal access is checked before delegation.
+     * POST {@code /api/v1/clients}.
+     * Opens a customer account or retrieves the account already associated with the same source enquiry.
      *
-     * @param request input carrying create client
+     * @param request contact and account details, with an optional source enquiry identifier
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the HTTP response for this operation
+     * @return HTTP 201 with the resulting customer account
      */
     @PostMapping
     public ResponseEntity<ClientResponse> createClient(
@@ -161,12 +170,14 @@ public class ClientController {
     }
 
     /**
-     * POST {@code /api/v1/clients/from-lead/{leadId}}. Creates client from lead. Internal access is checked before delegation.
+     * POST {@code /api/v1/clients/from-lead/{leadId}}.
+     * Converts the enquiry's contact details into a customer account, reusing an earlier conversion when
+     * present.
      *
      * @param leadId identifier of the source sales enquiry
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the client response
+     * @return the customer linked to that enquiry
      */
     @PostMapping("/from-lead/{leadId}")
     public ClientResponse createClientFromLead(
@@ -179,12 +190,13 @@ public class ClientController {
     }
 
     /**
-     * GET {@code /api/v1/clients/{clientId}/services}. Retrieves client services. Internal access is checked before delegation.
+     * GET {@code /api/v1/clients/{clientId}/services}.
+     * Lists the services assigned to the selected customer.
      *
      * @param clientId identifier of the client whose workspace is in scope
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the client service response items
+     * @return customer service assignments, newest first
      */
     @GetMapping("/{clientId}/services")
     public List<ClientServiceResponse> getClientServices(
@@ -197,13 +209,14 @@ public class ClientController {
     }
 
     /**
-     * POST {@code /api/v1/clients/{clientId}/services}. Assigns service. Internal access is checked before delegation.
+     * POST {@code /api/v1/clients/{clientId}/services}.
+     * Assigns a catalogue service to a customer or updates the existing pairing.
      *
      * @param clientId identifier of the client whose workspace is in scope
-     * @param request input carrying assign client service
+     * @param request catalogue service to assign, with optional status and notes
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the HTTP response for this operation
+     * @return HTTP 201 with the resulting customer service assignment
      */
     @PostMapping("/{clientId}/services")
     public ResponseEntity<ClientServiceResponse> assignService(
@@ -217,12 +230,13 @@ public class ClientController {
     }
 
     /**
-     * GET {@code /api/v1/clients/{clientId}/notes}. Retrieves client notes. Internal access is checked before delegation.
+     * GET {@code /api/v1/clients/{clientId}/notes}.
+     * Lists staff notes on a customer account.
      *
      * @param clientId identifier of the client whose workspace is in scope
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the internal note response items
+     * @return internal notes in reverse creation order
      */
     @GetMapping("/{clientId}/notes")
     public List<InternalNoteResponse> getClientNotes(
@@ -235,13 +249,14 @@ public class ClientController {
     }
 
     /**
-     * POST {@code /api/v1/clients/{clientId}/notes}. Adds client note. Internal access is checked before delegation.
+     * POST {@code /api/v1/clients/{clientId}/notes}.
+     * Attaches a staff note to the selected account.
      *
      * @param clientId identifier of the client whose workspace is in scope
-     * @param request input carrying create internal note
+     * @param request note content and optional author
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the HTTP response for this operation
+     * @return HTTP 201 with the saved note
      */
     @PostMapping("/{clientId}/notes")
     public ResponseEntity<InternalNoteResponse> addClientNote(
@@ -255,12 +270,13 @@ public class ClientController {
     }
 
     /**
-     * GET {@code /api/v1/clients/{clientId}/invitations}. Retrieves client invitations. Internal access is checked before delegation.
+     * GET {@code /api/v1/clients/{clientId}/invitations}.
+     * Shows staff the invitation history for a customer.
      *
      * @param clientId identifier of the client whose workspace is in scope
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the client invitation response items
+     * @return invitations in reverse creation order
      */
     @GetMapping("/{clientId}/invitations")
     public List<ClientInvitationResponse> getClientInvitations(
@@ -273,14 +289,16 @@ public class ClientController {
     }
 
     /**
-     * POST {@code /api/v1/clients/{clientId}/invitations}. Creates client invitation. Internal access is checked before delegation.
+     * POST {@code /api/v1/clients/{clientId}/invitations}.
+     * Invites a person to the customer's portal and revokes earlier unused invitations for the same
+     * customer and email.
      *
      * @param clientId identifier of the client whose workspace is in scope
-     * @param request input carrying create client invitation
+     * @param request invitation email and role for the selected customer
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
      * @param httpRequest incoming HTTP request, including its headers
-     * @return the HTTP response for this operation
+     * @return HTTP 201 with the new invitation details
      */
     @PostMapping("/{clientId}/invitations")
     public ResponseEntity<ClientInvitationResponse> createClientInvitation(
@@ -301,10 +319,10 @@ public class ClientController {
     }
 
     /**
-     * Resolves the signed-in internal user when staff session information is supplied.
+     * Looks up the staff user for invitation attribution when an administrative session is available.
      *
      * @param adminSessionToken session credential for the internal user
-     * @return the app user record
+     * @return the session user, or {@code null} if the lookup rejects the session
      */
     private AppUserEntity optionalAdminUser(String adminSessionToken) {
         try {
@@ -315,10 +333,10 @@ public class ClientController {
     }
 
     /**
-     * Obtains the network address associated with the request.
+     * Selects the first forwarded address when present, otherwise the servlet peer address.
      *
-     * @param request input carrying http servlet
-     * @return the resulting text
+     * @param request request that initiated the invitation
+     * @return the address passed to the invitation operation for its audit context
      */
     private String clientIp(HttpServletRequest request) {
         String forwardedFor = request.getHeader("X-Forwarded-For");
@@ -330,10 +348,10 @@ public class ClientController {
     }
 
     /**
-     * Reads the User-Agent header for the operation’s audit context.
+     * Reads the browser or client identification header for invitation attribution.
      *
-     * @param request input carrying http servlet
-     * @return the resulting text
+     * @param request request that initiated the invitation
+     * @return the User-Agent header, or {@code null} if absent
      */
     private String userAgent(HttpServletRequest request) {
         return request.getHeader("User-Agent");

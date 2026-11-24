@@ -22,7 +22,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** Materialize internal dry-run steps. `executionAllowed=false` remains the default. */
+/**
+ * Records a dry run of delivery work for an activated commercial workflow. Each simulated provider
+ * step has a status and an input summary for staff to inspect. A later operation can use these records
+ * when requesting real provider work.
+ */
 @Service
 @Transactional
 public class ProvisioningExecutionService {
@@ -79,12 +83,13 @@ public class ProvisioningExecutionService {
     }
 
     /**
-     * Creates dry run. Persists changes through {@code runRepository}.
+     * Records the steps that a delivery plan would require. Reuses a run already stored for this plan's
+     * commercial dry-run key.
      *
      * @param plan proposed or saved delivery plan
      * @param client customer account in scope
      * @param workspace client workspace in scope
-     * @return the provisioning run record
+     * @return the existing run or the new run, marked blocked when any provider step is blocked
      */
     public ProvisioningRunEntity createDryRun(ProvisioningPlanEntity plan, ClientEntity client, ClientWorkspaceEntity workspace) {
         String key = plan.getId() + ":commercial-v1";
@@ -166,10 +171,10 @@ public class ProvisioningExecutionService {
     }
 
     /**
-     * Maps latest.
+     * Finds the most recently created run for a plan and reads its steps.
      *
      * @param plan proposed or saved delivery plan
-     * @return the value produced by this operation
+     * @return the latest run summary, or {@code null} when the plan has no runs
      */
     @Transactional(readOnly = true)
     public CommercialFlowResponse.ProvisioningRun mapLatest(ProvisioningPlanEntity plan) {
@@ -177,10 +182,10 @@ public class ProvisioningExecutionService {
     }
 
     /**
-     * Builds {@code CommercialFlowResponse.ProvisioningRun} from {@code ProvisioningRunEntity}, selecting the fields used by the caller.
+     * Collects each recorded step's status, manual-action flag and input summary for display.
      *
      * @param run run
-     * @return the value produced by this operation
+     * @return the run summary with its steps in creation order
      */
     private CommercialFlowResponse.ProvisioningRun map(ProvisioningRunEntity run) {
         List<CommercialFlowResponse.ProvisioningStep> steps = stepRepository.findAllByRunOrderByCreatedAt(run).stream()
@@ -192,7 +197,8 @@ public class ProvisioningExecutionService {
     }
 
     /**
-     * Creates step. Persists changes through {@code stepRepository}.
+     * Saves the provider's preparation result as a step of the current dry run, with its correlation key
+     * and timestamps.
      *
      * @param run run
      * @param track service track within the delivery plan
@@ -229,7 +235,7 @@ public class ProvisioningExecutionService {
     }
 
     /**
-     * Builds the provider result for a requested resource.
+     * Asks the registered provider to prepare a result for the proposed resource and credential state.
      *
      * @param providerKey key identifying the integration provider
      * @param track service track within the delivery plan
@@ -238,7 +244,7 @@ public class ProvisioningExecutionService {
      * @param credentialsConfigured credentials configured
      * @param blockWhenCredentialsMissing block when credentials missing
      * @param missingCredentialsMessage missing credentials message
-     * @return the provisioning result
+     * @return the provider's result describing the planned step
      */
     private ProvisioningResult prepare(
             String providerKey,
@@ -263,12 +269,12 @@ public class ProvisioningExecutionService {
     }
 
     /**
-     * Summarizes the planned Jira work for the execution response.
+     * Describes a proposed issue under the workspace's Jira project.
      *
      * @param run run
      * @param track service track within the delivery plan
      * @param task task
-     * @return the resulting key–value pairs
+     * @return the sample issue type, summary, labels and project policy
      */
     private Map<String, Object> jiraSummary(ProvisioningRunEntity run, String track, String task) {
         Map<String, Object> summary = baseSummary(run, "JIRA");
@@ -282,11 +288,11 @@ public class ProvisioningExecutionService {
     }
 
     /**
-     * Summarizes the planned Drive resource for the execution response.
+     * Describes a proposed folder under the workspace's Drive root.
      *
      * @param run run
      * @param folder folder
-     * @return the resulting key–value pairs
+     * @return the root folder, child folder and sharing policy
      */
     private Map<String, Object> driveSummary(ProvisioningRunEntity run, String folder) {
         Map<String, Object> summary = baseSummary(run, "GOOGLE_DRIVE");
@@ -297,10 +303,10 @@ public class ProvisioningExecutionService {
     }
 
     /**
-     * Summarizes the planned calendar resource for the execution response.
+     * Describes the proposed one-hour kickoff in the Brussels time zone.
      *
      * @param run run
-     * @return the resulting key–value pairs
+     * @return the event name, duration, time zone and attendee policy
      */
     private Map<String, Object> calendarSummary(ProvisioningRunEntity run) {
         Map<String, Object> summary = baseSummary(run, "GOOGLE_CALENDAR");
@@ -313,13 +319,13 @@ public class ProvisioningExecutionService {
     }
 
     /**
-     * Builds the readable description for an individual plan item.
+     * Adds the requested resource, action and provider-specific policy to the plan item's preview.
      *
      * @param run run
      * @param item item
      * @param provider integration adapter in use
      * @param credentialsReady credentials ready
-     * @return the resulting key–value pairs
+     * @return the description stored with the provider step
      */
     private Map<String, Object> planItemSummary(
             ProvisioningRunEntity run,
@@ -347,11 +353,11 @@ public class ProvisioningExecutionService {
     }
 
     /**
-     * Populates the fields common to each resource summary.
+     * Identifies the plan, customer and workspace to which a proposed provider action belongs.
      *
      * @param run run
      * @param provider integration adapter in use
-     * @return the resulting key–value pairs
+     * @return the shared preview fields, including the dry-run and external-write flags
      */
     private Map<String, Object> baseSummary(ProvisioningRunEntity run, String provider) {
         Map<String, Object> summary = new LinkedHashMap<>();
@@ -368,23 +374,23 @@ public class ProvisioningExecutionService {
     }
 
     /**
-     * Limits the action description retained in the result.
+     * Shortens a long action label to fit the stored step description.
      *
      * @param value stored or supplied representation
-     * @return the resulting text
+     * @return the original label when it fits in 100 characters, otherwise its prefix followed by an ellipsis
      */
     private String boundedAction(String value) {
         return value.length() <= 100 ? value : value.substring(0, 97) + "...";
     }
 
     /**
-     * Builds the stable key used to recognize a repeated provisioning operation.
+     * Scopes a step key to the run, provider, track and action part. Long keys use a name-based digest.
      *
      * @param run run
      * @param provider integration adapter in use
      * @param track service track within the delivery plan
      * @param part part
-     * @return the resulting text
+     * @return the key used to recognize another record of the same step
      */
     private String idempotencyKey(ProvisioningRunEntity run, String provider, String track, String part) {
         String raw = run.getId() + ":" + provider + ":" + (track == null ? "shared" : track) + ":" + part;
@@ -394,10 +400,10 @@ public class ProvisioningExecutionService {
     }
 
     /**
-     * Reads track keys.
+     * Extracts distinct track names while preserving their first appearance in the saved plan.
      *
      * @param json JSON
-     * @return the string items
+     * @return the track names, or an empty list for blank or absent plan data
      * @throws IllegalStateException when validation reports “Provisioning tracks could not be read”
      */
     private List<String> readTrackKeys(String json) {
@@ -411,10 +417,10 @@ public class ProvisioningExecutionService {
     }
 
     /**
-     * Reads summary.
+     * Reads the stored input summary for display alongside the step.
      *
      * @param json JSON
-     * @return the resulting key–value pairs
+     * @return the decoded fields, an empty map for missing data, or a marker when decoding fails
      */
     private Map<String, Object> readSummary(String json) {
         if (json == null || json.isBlank()) return Map.of();
@@ -426,10 +432,10 @@ public class ProvisioningExecutionService {
     }
 
     /**
-     * Converts the value to JSON.
+     * Encodes the provider input summary before it is stored on a step.
      *
      * @param value stored or supplied representation
-     * @return JSON
+     * @return the serialized summary
      * @throws IllegalStateException when validation reports “Provisioning step summary could not be stored”
      */
     private String toJson(Object value) {

@@ -13,7 +13,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** Coordinates service catalog operations in the backend. */
+/**
+ * Maintains the catalogue of consultancy offerings and resolves launch modules to active catalogue
+ * services. The catalogue is shared across customers; a customer-specific assignment is stored
+ * separately.
+ */
 @Service
 @Transactional
 public class ServiceCatalogService {
@@ -40,10 +44,10 @@ public class ServiceCatalogService {
     }
 
     /**
-     * Creates service. Persists changes through {@code serviceRepository}.
+     * Adds a service to the catalogue. A missing active flag makes the new entry active.
      *
-     * @param request input carrying create service
-     * @return the service response
+     * @param request name, category, description and optional active flag
+     * @return the saved catalogue entry with its identifier and timestamps
      */
     public ServiceResponse createService(CreateServiceRequest request) {
         ServiceEntity entity = new ServiceEntity();
@@ -56,9 +60,9 @@ public class ServiceCatalogService {
     }
 
     /**
-     * Returns all services.
+     * Lists all catalogue entries in name order.
      *
-     * @return the service response items
+     * @return service descriptions in ascending name order
      */
     public List<ServiceResponse> getAllServices() {
         return serviceRepository.findAllByOrderByNameAsc()
@@ -68,21 +72,21 @@ public class ServiceCatalogService {
     }
 
     /**
-     * Retrieves service by id.
+     * Loads one entry from the service catalogue.
      *
-     * @param id unique identifier of the record
-     * @return identifier of the service by
+     * @param id identifier of the catalogue entry
+     * @return the service name, category, description, active flag and timestamps
      */
     public ServiceResponse getServiceById(UUID id) {
         return map(findServiceEntity(id));
     }
 
     /**
-     * Updates service. Persists changes through {@code serviceRepository}.
+     * Replaces the editable catalogue details and changes the active flag only when supplied.
      *
      * @param id unique identifier of the record
-     * @param request input carrying update service
-     * @return the service response
+     * @param request replacement catalogue details and optional active flag
+     * @return the saved version of the service
      */
     public ServiceResponse updateService(UUID id, UpdateServiceRequest request) {
         ServiceEntity entity = findServiceEntity(id);
@@ -98,10 +102,10 @@ public class ServiceCatalogService {
     }
 
     /**
-     * Finds service entity. Looks up the referenced record by identifier.
+     * Locates the persisted catalogue entry before assigning or editing a service.
      *
-     * @param id unique identifier of the record
-     * @return the service record
+     * @param id identifier of the catalogue entry
+     * @return the stored service with the requested identifier
      * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
      */
     ServiceEntity findServiceEntity(UUID id) {
@@ -110,10 +114,10 @@ public class ServiceCatalogService {
     }
 
     /**
-     * Finds service for module key.
+     * Resolves a launch module to the active catalogue entry configured for it.
      *
      * @param moduleKey key identifying the module
-     * @return the service record
+     * @return the active service required to launch that module
      * @throws IllegalArgumentException when validation reports “Unsupported launch service key”
      */
     public ServiceEntity findServiceForModuleKey(String moduleKey) {

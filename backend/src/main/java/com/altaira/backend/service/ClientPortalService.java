@@ -142,10 +142,11 @@ public class ClientPortalService {
     }
 
     /**
-     * Resolves the signed-in client and assembles the workspace information visible to that customer.
+     * Opens the authenticated customer's portal using its onboarding dashboard and current service
+     * assignments.
      *
      * @param context context carrying client access
-     * @return portal
+     * @return the workspace, onboarding and contract state, module access and projects
      */
     public ClientPortalResponse getPortal(ClientAccessContext context) {
         OnboardingDashboardResponse onboarding = onboardingService.getClientDashboard(context);
@@ -153,10 +154,10 @@ public class ClientPortalService {
     }
 
     /**
-     * Builds a staff-facing view of the selected customer’s portal for review.
+     * Builds the portal for the customer selected by staff using that customer's onboarding dashboard.
      *
      * @param clientId identifier of the client whose workspace is in scope
-     * @return portal for admin
+     * @return the selected customer's portal and project overview
      */
     public ClientPortalResponse getPortalForAdmin(UUID clientId) {
         OnboardingDashboardResponse onboarding = onboardingService.getAdminDashboard(clientId);
@@ -165,9 +166,9 @@ public class ClientPortalService {
     }
 
     /**
-     * Lists projects as admin.
+     * Lists customer projects for the staff directory, excluding recognised test accounts.
      *
-     * @return the admin client project summary response items
+     * @return project summaries ordered by most recent update
      */
     @Transactional(readOnly = true)
     public List<AdminClientProjectSummaryResponse> listProjectsAsAdmin() {
@@ -179,9 +180,10 @@ public class ClientPortalService {
     }
 
     /**
-     * Lists action items as admin.
+     * Combines submitted onboarding tasks, uploaded assets and pending project feedback in one staff
+     * review queue.
      *
-     * @return the admin action item response items
+     * @return actions with critical items first, then earlier action times
      */
     @Transactional(readOnly = true)
     public List<AdminActionItemResponse> listActionItemsAsAdmin() {
@@ -219,11 +221,12 @@ public class ClientPortalService {
     }
 
     /**
-     * Updates project as admin. Persists changes through {@code clientProjectRepository}.
+     * Applies supplied changes to the project name, phase and staging URL. Moving out of review clears the
+     * pending revision timestamp.
      *
      * @param projectId identifier of the client project
-     * @param request input carrying update client project
-     * @return the client project response
+     * @param request the project name, phase or staging URL changes to apply
+     * @return the saved project overview
      */
     public ClientProjectResponse updateProjectAsAdmin(UUID projectId, UpdateClientProjectRequest request) {
         ClientProjectEntity project = findProject(projectId);
@@ -250,12 +253,12 @@ public class ClientPortalService {
     }
 
     /**
-     * Lists project assets.
+     * Lists assets after confirming contract approval and the project's ownership.
      *
      * @param context context carrying client access
      * @param projectId identifier of the client project
-     * @return the client project asset response items
-     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (locked)
+     * @return the project's assets in upload order, oldest first
+     * @throws org.springframework.web.server.ResponseStatusException if the contract is awaiting approval or the project belongs to another customer
      */
     public List<ClientProjectAssetResponse> listProjectAssets(
             ClientAccessContext context,
@@ -280,15 +283,15 @@ public class ClientPortalService {
     }
 
     /**
-     * Uploads project assets. Persists changes through {@code clientProjectAssetRepository}.
+     * Stores the supplied files under the customer's project once its contract is approved.
      *
      * @param context context carrying client access
      * @param projectId identifier of the client project
      * @param files files
      * @param assetType asset type
      * @param notes free-text notes associated with the item
-     * @return the client project asset response items
-     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (locked)
+     * @return the asset details created for the accepted uploads
+     * @throws org.springframework.web.server.ResponseStatusException if the contract is awaiting approval or the project belongs to another customer
      * @throws IllegalArgumentException when validation reports “At least one project asset file is required”
      */
     public List<ClientProjectAssetResponse> uploadProjectAssets(
@@ -346,12 +349,13 @@ public class ClientPortalService {
     }
 
     /**
-     * Prepares project asset upload.
+     * Issues upload instructions scoped to a project of the authenticated customer after contract
+     * approval.
      *
      * @param context context carrying client access
      * @param projectId identifier of the client project
-     * @param request input carrying prepare private upload
-     * @return the upload URL response
+     * @param request file metadata used to prepare the upload
+     * @return the upload URL, expected HTTP method, object location and expiry
      */
     public UploadUrlResponse prepareProjectAssetUpload(
             ClientAccessContext context,
@@ -374,13 +378,14 @@ public class ClientPortalService {
     }
 
     /**
-     * Validates the uploaded project asset and completes its registration in the workspace.
+     * Verifies the stored object against the project's upload request before recording it. A previously
+     * registered object in the same project reuses its asset record.
      *
      * @param context context carrying client access
      * @param projectId identifier of the client project
-     * @param request input carrying complete private upload
-     * @return the client project asset response
-     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (conflict)
+     * @param request storage location and file metadata to verify
+     * @return the verified project asset, newly recorded or reused
+     * @throws org.springframework.web.server.ResponseStatusException if the portal is locked or the verified asset or project belongs to another context
      */
     public ClientProjectAssetResponse completeProjectAssetUpload(
             ClientAccessContext context,
@@ -438,13 +443,14 @@ public class ClientPortalService {
     }
 
     /**
-     * Creates project link. Persists changes through {@code clientProjectAssetRepository}.
+     * Registers an external URL as an asset on the customer's project. If no label is given, the URL's
+     * host supplies it.
      *
      * @param context context carrying client access
      * @param projectId identifier of the client project
-     * @param request input carrying create project link
-     * @return the client project asset response
-     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (locked)
+     * @param request external URL with an optional label and supporting notes
+     * @return the saved link asset and its project metadata
+     * @throws org.springframework.web.server.ResponseStatusException if the contract is awaiting approval or the project belongs to another customer
      */
     public ClientProjectAssetResponse createProjectLink(
             ClientAccessContext context,
@@ -488,10 +494,10 @@ public class ClientPortalService {
     }
 
     /**
-     * Lists project assets as admin.
+     * Lists the assets submitted to a project for staff review.
      *
      * @param projectId identifier of the client project
-     * @return the client project asset response items
+     * @return the project's assets in upload order, oldest first
      */
     @Transactional(readOnly = true)
     public List<ClientProjectAssetResponse> listProjectAssetsAsAdmin(UUID projectId) {
@@ -503,10 +509,10 @@ public class ClientPortalService {
     }
 
     /**
-     * Lists project config snapshots as admin.
+     * Shows the project's saved configuration versions to staff.
      *
      * @param projectId identifier of the client project
-     * @return the client project config snapshot response items
+     * @return configuration snapshots in reverse creation order
      */
     @Transactional(readOnly = true)
     public List<ClientProjectConfigSnapshotResponse> listProjectConfigSnapshotsAsAdmin(UUID projectId) {
@@ -518,12 +524,12 @@ public class ClientPortalService {
     }
 
     /**
-     * Creates project config snapshot as admin. Persists changes through {@code clientProjectConfigSnapshotRepository}.
+     * Parses the supplied JSON and stores a configuration snapshot with its project and author.
      *
      * @param projectId identifier of the client project
-     * @param request input carrying create client project config snapshot
+     * @param request JSON configuration, label and artifact type to save
      * @param createdByUsername created by username
-     * @return the client project config snapshot response
+     * @return the saved snapshot and its metadata
      */
     public ClientProjectConfigSnapshotResponse createProjectConfigSnapshotAsAdmin(
             UUID projectId,
@@ -546,11 +552,11 @@ public class ClientPortalService {
     }
 
     /**
-     * Retrieves project asset download as admin.
+     * Opens a stored project file for a staff download. External links have no file stream.
      *
      * @param assetId identifier of the asset
-     * @return project asset download as admin
-     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (bad request)
+     * @return the asset metadata and its open input stream
+     * @throws org.springframework.web.server.ResponseStatusException if the asset is an external link rather than a stored file
      * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
      */
     @Transactional(readOnly = true)
@@ -569,12 +575,13 @@ public class ClientPortalService {
     }
 
     /**
-     * Retrieves project asset download.
+     * Checks that the file belongs to the signed-in customer before opening it. External link assets
+     * cannot be streamed.
      *
      * @param context context carrying client access
      * @param assetId identifier of the asset
-     * @return project asset download
-     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (forbidden, bad request)
+     * @return the customer's file metadata and open input stream
+     * @throws org.springframework.web.server.ResponseStatusException if the asset belongs to another customer or is an external link
      * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
      */
     @Transactional(readOnly = true)
@@ -603,7 +610,7 @@ public class ClientPortalService {
      * Requires unlocked portal.
      *
      * @param context context carrying client access
-     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (locked)
+     * @throws org.springframework.web.server.ResponseStatusException if the contract has not been approved
      */
     private void requireUnlockedPortal(ClientAccessContext context) {
         OnboardingDashboardResponse onboarding = onboardingService.getClientDashboard(context);
@@ -633,10 +640,10 @@ public class ClientPortalService {
     }
 
     /**
-     * Approves project asset as admin. Persists changes through {@code clientProjectAssetRepository}.
+     * Marks the asset approved, clears prior review feedback and records the review time.
      *
      * @param assetId identifier of the asset
-     * @return the client project asset response
+     * @return the saved asset with its new review state
      */
     public ClientProjectAssetResponse approveProjectAssetAsAdmin(UUID assetId) {
         ClientProjectAssetEntity asset = findAsset(assetId);
@@ -647,11 +654,11 @@ public class ClientPortalService {
     }
 
     /**
-     * Rejects project asset as admin. Persists changes through {@code clientProjectAssetRepository}.
+     * Marks the asset rejected and records the review time and any staff feedback.
      *
      * @param assetId identifier of the asset
-     * @param request input carrying review project asset
-     * @return the client project asset response
+     * @param request optional feedback explaining the rejection
+     * @return the saved asset with its feedback and review state
      */
     public ClientProjectAssetResponse rejectProjectAssetAsAdmin(UUID assetId, ReviewProjectAssetRequest request) {
         ClientProjectAssetEntity asset = findAsset(assetId);
@@ -662,13 +669,14 @@ public class ClientPortalService {
     }
 
     /**
-     * Submits project feedback. Persists changes through {@code clientProjectRepository}.
+     * Records the customer's latest feedback and moves the project into review with a pending revision
+     * timestamp.
      *
      * @param context context carrying client access
      * @param projectId identifier of the client project
-     * @param request input carrying submit project feedback
-     * @return the client project response
-     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (locked, forbidden)
+     * @param request the client's comments on the project
+     * @return the updated project in the review phase
+     * @throws org.springframework.web.server.ResponseStatusException if the contract is awaiting approval or the project belongs to another customer
      */
     public ClientProjectResponse submitProjectFeedback(
             ClientAccessContext context,
@@ -698,11 +706,12 @@ public class ClientPortalService {
     }
 
     /**
-     * Builds portal.
+     * Collects the customer's service assignments and ensures each assigned module has its project before
+     * building the portal.
      *
      * @param client customer account in scope
-     * @param onboarding onboarding
-     * @return the client portal response
+     * @param onboarding workspace, contract and access state from the onboarding dashboard
+     * @return the workspace overview with its module and project lists
      */
     private ClientPortalResponse buildPortal(ClientEntity client, OnboardingDashboardResponse onboarding) {
         List<ClientServiceEntity> activeAssignments = clientServiceRepository.findAllByClientOrderByCreatedAtDesc(client)
@@ -744,10 +753,10 @@ public class ClientPortalService {
     }
 
     /**
-     * Checks whether this is visible client service.
+     * Checks whether a service assignment should appear in the portal.
      *
-     * @param assignment assignment
-     * @return true if the value is visible client service
+     * @param assignment service assignment being considered for display
+     * @return true when the assignment has a non-null status other than cancelled
      */
     private boolean isVisibleClientService(ClientServiceEntity assignment) {
         return assignment.getStatus() != null &&
@@ -755,11 +764,11 @@ public class ClientPortalService {
     }
 
     /**
-     * Chooses which service assignment to display when several refer to the same module.
+     * Chooses one assignment when a module has several candidates.
      *
-     * @param current current
-     * @param candidate candidate
-     * @return the client service record
+     * @param current assignment already selected for the module
+     * @param candidate another assignment for the same module
+     * @return an in-progress assignment when available, otherwise the more recently created assignment
      */
     private ClientServiceEntity preferMostRelevantAssignment(ClientServiceEntity current, ClientServiceEntity candidate) {
         if (ClientServiceStatus.IN_PROGRESS.value().equals(candidate.getStatus())) {
@@ -774,10 +783,11 @@ public class ClientPortalService {
     }
 
     /**
-     * Ensures module projects. Persists changes through {@code clientProjectRepository}.
+     * Creates a project when an assigned module has no matching project for this customer, service
+     * assignment and module key.
      *
      * @param client customer account in scope
-     * @param assignmentByModule assignment by module
+     * @param assignmentByModule selected service assignment for each assigned module
      */
     private void ensureModuleProjects(ClientEntity client, Map<String, ClientServiceEntity> assignmentByModule) {
         MODULES.forEach(module -> {
@@ -1023,7 +1033,7 @@ public class ClientPortalService {
      *
      * @param project project
      * @param client customer account in scope
-     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (forbidden)
+     * @throws org.springframework.web.server.ResponseStatusException if the project belongs to another customer
      */
     private void ensureProjectBelongsToClient(ClientProjectEntity project, ClientEntity client) {
         if (!project.getClient().getId().equals(client.getId())) {

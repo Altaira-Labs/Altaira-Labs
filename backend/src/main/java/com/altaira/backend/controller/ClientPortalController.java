@@ -31,7 +31,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 
-/** HTTP endpoints for client portal under {@code /api/v1/client-portal}. */
+/**
+ * HTTP interface to customer projects under {@code /api/v1/client-portal}. Client sessions can view
+ * their project resources and submit feedback or uploads when permitted. Staff routes expose the
+ * review queue, project updates and customer previews.
+ */
 @RestController
 @RequestMapping("/api/v1/client-portal")
 @CrossOrigin(origins = {
@@ -65,10 +69,12 @@ public class ClientPortalController {
     }
 
     /**
-     * GET {@code /api/v1/client-portal/me}. Retrieves my portal. Membership is checked before the workspace operation.
+     * GET {@code /api/v1/client-portal/me}.
+     * Opens the authenticated customer's portal using its onboarding dashboard and current service
+     * assignments.
      *
      * @param clientSessionToken session credential supplied for the client workspace
-     * @return my portal
+     * @return the workspace, onboarding and contract state, module access and projects
      */
     @GetMapping("/me")
     public ClientPortalResponse getMyPortal(
@@ -79,12 +85,14 @@ public class ClientPortalController {
     }
 
     /**
-     * PATCH {@code /api/v1/client-portal/client/projects/{projectId}/feedback}. Submits project feedback. Membership is checked before the workspace operation.
+     * PATCH {@code /api/v1/client-portal/client/projects/{projectId}/feedback}.
+     * Records the customer's latest feedback and moves the project into review with a pending revision
+     * timestamp. Requires a client session with write access.
      *
      * @param projectId identifier of the client project
-     * @param request input carrying submit project feedback
+     * @param request the client's comments on the project
      * @param clientSessionToken session credential supplied for the client workspace
-     * @return the client project response
+     * @return the updated project in the review phase
      */
     @PatchMapping("/client/projects/{projectId}/feedback")
     public ClientProjectResponse submitProjectFeedback(
@@ -98,11 +106,12 @@ public class ClientPortalController {
     }
 
     /**
-     * GET {@code /api/v1/client-portal/client/projects/{projectId}/assets}. Lists project assets. Membership is checked before the workspace operation.
+     * GET {@code /api/v1/client-portal/client/projects/{projectId}/assets}.
+     * Lists assets after confirming contract approval and the project's ownership.
      *
      * @param projectId identifier of the client project
      * @param clientSessionToken session credential supplied for the client workspace
-     * @return the client project asset response items
+     * @return the project's assets in upload order, oldest first
      */
     @GetMapping("/client/projects/{projectId}/assets")
     public List<ClientProjectAssetResponse> listProjectAssets(
@@ -114,14 +123,16 @@ public class ClientPortalController {
     }
 
     /**
-     * POST {@code /api/v1/client-portal/client/projects/{projectId}/assets}. Uploads project assets. Membership is checked before the workspace operation.
+     * POST {@code /api/v1/client-portal/client/projects/{projectId}/assets}.
+     * Stores the supplied files under the customer's project once its contract is approved. Requires a
+     * client session with write access.
      *
      * @param projectId identifier of the client project
      * @param files files
      * @param assetType asset type
      * @param notes free-text notes associated with the item
      * @param clientSessionToken session credential supplied for the client workspace
-     * @return the client project asset response items
+     * @return the asset details created for the accepted uploads
      */
     @PostMapping(value = "/client/projects/{projectId}/assets", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public List<ClientProjectAssetResponse> uploadProjectAssets(
@@ -137,12 +148,14 @@ public class ClientPortalController {
     }
 
     /**
-     * POST {@code /api/v1/client-portal/client/projects/{projectId}/assets/upload-url}. Prepares project asset upload. Membership is checked before the workspace operation.
+     * POST {@code /api/v1/client-portal/client/projects/{projectId}/assets/upload-url}.
+     * Issues upload instructions scoped to a project of the authenticated customer after contract
+     * approval. Requires a client session with write access.
      *
      * @param projectId identifier of the client project
-     * @param request input carrying prepare private upload
+     * @param request file metadata used to prepare the upload
      * @param clientSessionToken session credential supplied for the client workspace
-     * @return the upload URL response
+     * @return the upload URL, expected HTTP method, object location and expiry
      */
     @PostMapping("/client/projects/{projectId}/assets/upload-url")
     public UploadUrlResponse prepareProjectAssetUpload(
@@ -156,12 +169,15 @@ public class ClientPortalController {
     }
 
     /**
-     * POST {@code /api/v1/client-portal/client/projects/{projectId}/assets/complete}. Complete project asset upload. Membership is checked before the workspace operation.
+     * POST {@code /api/v1/client-portal/client/projects/{projectId}/assets/complete}.
+     * Verifies the stored object against the project's upload request before recording it. A previously
+     * registered object in the same project reuses its asset record. Requires a client session with write
+     * access.
      *
      * @param projectId identifier of the client project
-     * @param request input carrying complete private upload
+     * @param request storage location and file metadata to verify
      * @param clientSessionToken session credential supplied for the client workspace
-     * @return the client project asset response
+     * @return the verified project asset, newly recorded or reused
      */
     @PostMapping("/client/projects/{projectId}/assets/complete")
     public ClientProjectAssetResponse completeProjectAssetUpload(
@@ -175,12 +191,14 @@ public class ClientPortalController {
     }
 
     /**
-     * POST {@code /api/v1/client-portal/client/projects/{projectId}/links}. Creates project link. Membership is checked before the workspace operation.
+     * POST {@code /api/v1/client-portal/client/projects/{projectId}/links}.
+     * Registers an external URL as an asset on the customer's project. If no label is given, the URL's
+     * host supplies it. Requires a client session with write access.
      *
      * @param projectId identifier of the client project
-     * @param request input carrying create project link
+     * @param request external URL with an optional label and supporting notes
      * @param clientSessionToken session credential supplied for the client workspace
-     * @return the client project asset response
+     * @return the saved link asset and its project metadata
      */
     @PostMapping("/client/projects/{projectId}/links")
     public ClientProjectAssetResponse createProjectLink(
@@ -194,11 +212,13 @@ public class ClientPortalController {
     }
 
     /**
-     * GET {@code /api/v1/client-portal/client/project-assets/{assetId}/download}. Downloads project asset. Membership is checked before the workspace operation.
+     * GET {@code /api/v1/client-portal/client/project-assets/{assetId}/download}.
+     * Checks that the file belongs to the signed-in customer before opening it. External link assets
+     * cannot be streamed.
      *
      * @param assetId identifier of the asset
      * @param clientSessionToken session credential supplied for the client workspace
-     * @return the HTTP response for this operation
+     * @return HTTP 200 with the file stream, attachment filename, content length and content type
      * @throws IOException if the underlying input or output cannot be completed
      */
     @GetMapping("/client/project-assets/{assetId}/download")
@@ -233,12 +253,13 @@ public class ClientPortalController {
     }
 
     /**
-     * GET {@code /api/v1/client-portal/admin/clients/{clientId}}. Retrieves client portal as admin. Internal access is checked before delegation.
+     * GET {@code /api/v1/client-portal/admin/clients/{clientId}}.
+     * Builds the portal for the customer selected by staff using that customer's onboarding dashboard.
      *
      * @param clientId identifier of the client whose workspace is in scope
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return client portal as admin
+     * @return the selected customer's portal and project overview
      */
     @GetMapping("/admin/clients/{clientId}")
     public ClientPortalResponse getClientPortalAsAdmin(
@@ -251,11 +272,12 @@ public class ClientPortalController {
     }
 
     /**
-     * GET {@code /api/v1/client-portal/admin/projects}. Lists projects as admin. Internal access is checked before delegation.
+     * GET {@code /api/v1/client-portal/admin/projects}.
+     * Lists customer projects for the staff directory, excluding recognised test accounts.
      *
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the admin client project summary response items
+     * @return project summaries ordered by most recent update
      */
     @GetMapping("/admin/projects")
     public List<AdminClientProjectSummaryResponse> listProjectsAsAdmin(
@@ -267,11 +289,13 @@ public class ClientPortalController {
     }
 
     /**
-     * GET {@code /api/v1/client-portal/admin/actions}. Lists action items as admin. Internal access is checked before delegation.
+     * GET {@code /api/v1/client-portal/admin/actions}.
+     * Combines submitted onboarding tasks, uploaded assets and pending project feedback in one staff
+     * review queue.
      *
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the admin action item response items
+     * @return actions with critical items first, then earlier action times
      */
     @GetMapping("/admin/actions")
     public List<AdminActionItemResponse> listActionItemsAsAdmin(
@@ -283,13 +307,15 @@ public class ClientPortalController {
     }
 
     /**
-     * PATCH {@code /api/v1/client-portal/admin/projects/{projectId}}. Updates project as admin. Internal access is checked before delegation.
+     * PATCH {@code /api/v1/client-portal/admin/projects/{projectId}}.
+     * Applies supplied changes to the project name, phase and staging URL. Moving out of review clears the
+     * pending revision timestamp. Requires internal access.
      *
      * @param projectId identifier of the client project
-     * @param request input carrying update client project
+     * @param request the project name, phase or staging URL changes to apply
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the client project response
+     * @return the saved project overview
      */
     @PatchMapping("/admin/projects/{projectId}")
     public ClientProjectResponse updateProjectAsAdmin(
@@ -303,12 +329,13 @@ public class ClientPortalController {
     }
 
     /**
-     * GET {@code /api/v1/client-portal/admin/projects/{projectId}/assets}. Lists project assets as admin. Internal access is checked before delegation.
+     * GET {@code /api/v1/client-portal/admin/projects/{projectId}/assets}.
+     * Lists the assets submitted to a project for staff review.
      *
      * @param projectId identifier of the client project
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the client project asset response items
+     * @return the project's assets in upload order, oldest first
      */
     @GetMapping("/admin/projects/{projectId}/assets")
     public List<ClientProjectAssetResponse> listProjectAssetsAsAdmin(
@@ -321,12 +348,13 @@ public class ClientPortalController {
     }
 
     /**
-     * GET {@code /api/v1/client-portal/admin/projects/{projectId}/config-snapshots}. Lists project config snapshots as admin. Internal access is checked before delegation.
+     * GET {@code /api/v1/client-portal/admin/projects/{projectId}/config-snapshots}.
+     * Shows the project's saved configuration versions to staff.
      *
      * @param projectId identifier of the client project
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the client project config snapshot response items
+     * @return configuration snapshots in reverse creation order
      */
     @GetMapping("/admin/projects/{projectId}/config-snapshots")
     public List<ClientProjectConfigSnapshotResponse> listProjectConfigSnapshotsAsAdmin(
@@ -339,13 +367,15 @@ public class ClientPortalController {
     }
 
     /**
-     * POST {@code /api/v1/client-portal/admin/projects/{projectId}/config-snapshots}. Creates project config snapshot as admin. Internal access is checked before delegation.
+     * POST {@code /api/v1/client-portal/admin/projects/{projectId}/config-snapshots}.
+     * Parses the supplied JSON and stores a configuration snapshot with its project and author. Requires
+     * internal access.
      *
      * @param projectId identifier of the client project
-     * @param request input carrying create client project config snapshot
+     * @param request JSON configuration, label and artifact type to save
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the client project config snapshot response
+     * @return the saved snapshot and its metadata
      */
     @PostMapping("/admin/projects/{projectId}/config-snapshots")
     public ClientProjectConfigSnapshotResponse createProjectConfigSnapshotAsAdmin(
@@ -360,12 +390,14 @@ public class ClientPortalController {
     }
 
     /**
-     * PATCH {@code /api/v1/client-portal/admin/project-assets/{assetId}/approve}. Approves project asset as admin. Internal access is checked before delegation.
+     * PATCH {@code /api/v1/client-portal/admin/project-assets/{assetId}/approve}.
+     * Marks the asset approved, clears prior review feedback and records the review time. Requires
+     * internal access.
      *
      * @param assetId identifier of the asset
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the client project asset response
+     * @return the saved asset with its new review state
      */
     @PatchMapping("/admin/project-assets/{assetId}/approve")
     public ClientProjectAssetResponse approveProjectAssetAsAdmin(
@@ -378,13 +410,14 @@ public class ClientPortalController {
     }
 
     /**
-     * PATCH {@code /api/v1/client-portal/admin/project-assets/{assetId}/reject}. Rejects project asset as admin. Internal access is checked before delegation.
+     * PATCH {@code /api/v1/client-portal/admin/project-assets/{assetId}/reject}.
+     * Marks the asset rejected and records the review time and any staff feedback.
      *
      * @param assetId identifier of the asset
-     * @param request input carrying review project asset
+     * @param request optional feedback explaining the rejection
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the client project asset response
+     * @return the saved asset with its feedback and review state
      */
     @PatchMapping("/admin/project-assets/{assetId}/reject")
     public ClientProjectAssetResponse rejectProjectAssetAsAdmin(
@@ -398,12 +431,13 @@ public class ClientPortalController {
     }
 
     /**
-     * GET {@code /api/v1/client-portal/admin/project-assets/{assetId}/download}. Downloads project asset as admin. Internal access is checked before delegation.
+     * GET {@code /api/v1/client-portal/admin/project-assets/{assetId}/download}.
+     * Opens a stored project file for a staff download. External links have no file stream.
      *
      * @param assetId identifier of the asset
      * @param internalApiToken credential presented to the internal API boundary
      * @param adminSessionToken session credential for the internal user
-     * @return the HTTP response for this operation
+     * @return HTTP 200 with the file stream, attachment filename, content length and content type
      * @throws IOException if the underlying input or output cannot be completed
      */
     @GetMapping("/admin/project-assets/{assetId}/download")

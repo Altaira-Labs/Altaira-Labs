@@ -31,7 +31,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/** Client list/detail and administrative changes. Admin operations use explicit DTOs and state rules. */
+/**
+ * Opens customer accounts directly or from sales enquiries. Also builds staff delivery summaries from
+ * the customer's service assignments, projects, tasks and workspace.
+ */
 @Service
 @Transactional
 public class ClientManagementService {
@@ -76,10 +79,11 @@ public class ClientManagementService {
     }
 
     /**
-     * Creates client. Persists changes through {@code clientRepository}. Uses locale-independent case normalization.
+     * Creates a customer account from contact details. If the source enquiry already has a customer,
+     * returns that existing account.
      *
-     * @param request input carrying create client
-     * @return the client response
+     * @param request contact and account details, with an optional source enquiry identifier
+     * @return the saved customer or the customer already linked to the enquiry
      * @throws com.altaira.backend.exception.LeadNotFoundException if the sales enquiry does not exist
      */
     public ClientResponse createClient(CreateClientRequest request) {
@@ -108,10 +112,11 @@ public class ClientManagementService {
     }
 
     /**
-     * Creates client from lead. Persists changes through {@code clientRepository}.
+     * Copies the enquiry's contact information into an active customer account and infers its sector.
+     * Reuses the account when the enquiry was converted earlier.
      *
      * @param leadId identifier of the source sales enquiry
-     * @return the client response
+     * @return the customer associated with the enquiry
      * @throws com.altaira.backend.exception.LeadNotFoundException if the sales enquiry does not exist
      */
     public ClientResponse createClientFromLead(UUID leadId) {
@@ -136,9 +141,9 @@ public class ClientManagementService {
     }
 
     /**
-     * Returns all clients.
+     * Lists customer accounts in reverse creation order.
      *
-     * @return the client response items
+     * @return customer details, newest accounts first
      */
     public List<ClientResponse> getAllClients() {
         return clientRepository.findAllByOrderByCreatedAtDesc()
@@ -148,19 +153,20 @@ public class ClientManagementService {
     }
 
     /**
-     * Retrieves client by id.
+     * Loads the customer's contact and account details for the supplied identifier.
      *
-     * @param id unique identifier of the record
-     * @return identifier of the client by
+     * @param id customer account to load
+     * @return the customer's details, including status, sector and source enquiry if recorded
      */
     public ClientResponse getClientById(UUID id) {
         return map(findClientEntity(id));
     }
 
     /**
-     * Retrieves admin client summaries.
+     * Combines service assignments, projects and open tasks for the customer directory. Test fixtures are
+     * omitted from this list.
      *
-     * @return the admin client summary response items
+     * @return one delivery overview per included customer, newest accounts first
      */
     public List<AdminClientSummaryResponse> getAdminClientSummaries() {
         List<ClientEntity> clients = clientRepository.findAllByOrderByCreatedAtDesc()
@@ -191,10 +197,10 @@ public class ClientManagementService {
     }
 
     /**
-     * Retrieves admin client summary.
+     * Collects the service assignments, projects and tasks for one customer into a delivery overview.
      *
-     * @param id unique identifier of the record
-     * @return admin client summary
+     * @param id customer whose delivery activity is being summarized
+     * @return the account's delivery state, next open task if present and last activity
      */
     public AdminClientSummaryResponse getAdminClientSummary(UUID id) {
         ClientEntity client = findClientEntity(id);
@@ -207,10 +213,10 @@ public class ClientManagementService {
     }
 
     /**
-     * Finds client entity. Looks up the referenced record by identifier.
+     * Loads the customer row for operations that need to attach a related record.
      *
      * @param id unique identifier of the record
-     * @return the client record
+     * @return the persisted customer with the supplied identifier
      * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
      */
     ClientEntity findClientEntity(UUID id) {
@@ -219,10 +225,10 @@ public class ClientManagementService {
     }
 
     /**
-     * Builds {@code ClientResponse} from {@code ClientEntity}, selecting the fields used by the caller.
+     * Builds the API response from the stored account.
      *
-     * @param entity record carrying client
-     * @return the client response
+     * @param entity stored customer account
+     * @return contact details, status and dates, with a nullable source enquiry identifier
      */
     ClientResponse map(ClientEntity entity) {
         UUID sourceLeadId = entity.getSourceLead() == null ? null : entity.getSourceLead().getId();
@@ -242,13 +248,14 @@ public class ClientManagementService {
     }
 
     /**
-     * Maps admin summary.
+     * Counts open tasks and projects, selects the next task and combines their activity with the
+     * customer's service assignments.
      *
      * @param client customer account in scope
      * @param services services
      * @param projects projects
      * @param tasks tasks
-     * @return the admin client summary response
+     * @return the account's delivery overview, including workspace availability
      */
     private AdminClientSummaryResponse mapAdminSummary(
             ClientEntity client,
@@ -305,13 +312,14 @@ public class ClientManagementService {
     }
 
     /**
-     * Combines delivery indicators into the status shown on the administrative client summary.
+     * Uses the account's own status when inactive. For an active account, blocked work takes precedence
+     * over work needing attention.
      *
      * @param client customer account in scope
      * @param activeAssignments active assignments
      * @param projects projects
      * @param openTasks open tasks
-     * @return the resulting text
+     * @return the delivery status shown in the administrative directory
      */
     private String overallState(
             ClientEntity client,
@@ -343,10 +351,10 @@ public class ClientManagementService {
     }
 
     /**
-     * Chooses the most recent available timestamp for the customer summary.
+     * Selects the latest available activity time across related records.
      *
      * @param values values
-     * @return the resulting instant in time
+     * @return the greatest non-null timestamp, or {@code null} if all inputs are absent
      */
     private Instant latestInstant(Instant... values) {
         return Arrays.stream(values)
@@ -356,10 +364,10 @@ public class ClientManagementService {
     }
 
     /**
-     * Checks whether this is technical fixture. Uses locale-independent case normalization.
+     * Recognizes synthetic end-to-end accounts by their name, company or email.
      *
      * @param client customer account in scope
-     * @return true if the value is technical fixture
+     * @return whether to omit this account from the administrative directory
      */
     private boolean isTechnicalFixture(ClientEntity client) {
         String name = client.getName() == null ? "" : client.getName().trim().toLowerCase(Locale.ROOT);
@@ -374,10 +382,10 @@ public class ClientManagementService {
     }
 
     /**
-     * Infers the customer sector from its source enquiry.
+     * Looks for sector terms in the enquiry's industry, service interest and goals.
      *
-     * @param lead sales enquiry in scope
-     * @return the resulting text
+     * @param lead enquiry whose free-text answers describe the customer's business
+     * @return the matched sector key, or the custom sector when no term matches
      */
     private String inferSectorFromLead(LeadEntity lead) {
         String combined = ((lead.getIndustry() == null ? "" : lead.getIndustry()) + " " +
@@ -400,20 +408,20 @@ public class ClientManagementService {
     }
 
     /**
-     * Trims surrounding whitespace. Absent values use an empty string.
+     * Trims the submitted contact field before storing it.
      *
      * @param value stored or supplied representation
-     * @return the resulting text
+     * @return the trimmed value, or an empty string for missing input
      */
     private String trimRequired(String value) {
         return value == null ? "" : value.trim();
     }
 
     /**
-     * Trims surrounding whitespace. Absent values use an empty string.
+     * Normalizes an optional contact field before storing it.
      *
      * @param value stored or supplied representation
-     * @return the resulting text
+     * @return the trimmed value, or an empty string for missing input
      */
     private String trimOptional(String value) {
         if (value == null || value.isBlank()) {
