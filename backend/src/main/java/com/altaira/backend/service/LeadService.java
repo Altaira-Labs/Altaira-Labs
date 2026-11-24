@@ -23,16 +23,16 @@ import java.util.UUID;
 @Service
 public class LeadService {
 
-    /** Persistence access for lead. */
+    /** Stores enquiries received by the consultancy and reads them in creation order. */
     private final LeadRepository leadRepository;
-    /** Lead notification operations used by this component. */
+    /** Sends the follow-up notification after a public enquiry has been saved. */
     private final LeadNotificationService leadNotificationService;
 
     /**
-     * Creates the lead service with its injected collaborators.
+     * Connects the sales inbox to its database repository and its notification service.
      *
-     * @param leadRepository persistence access for lead
-     * @param leadNotificationService lead notification operations used by this component
+     * @param leadRepository repository for the consultancy’s sales inbox
+     * @param leadNotificationService service that reports the outcome of the notification attempt
      */
     public LeadService(LeadRepository leadRepository, LeadNotificationService leadNotificationService) {
         this.leadRepository = leadRepository;
@@ -40,10 +40,11 @@ public class LeadService {
     }
 
     /**
-     * Creates lead.
+     * Records a website enquiry, then attempts to notify the consultancy.
+     * The returned notification fields describe that second step independently of the saved enquiry.
      *
-     * @param request input carrying create lead
-     * @return the lead response
+     * @param request contact details, business and goals supplied through the public form
+     * @return the saved enquiry and the notification outcome
      */
     public LeadResponse createLead(CreateLeadRequest request) {
         LeadEntity saved = saveLead(
@@ -64,11 +65,12 @@ public class LeadService {
     }
 
     /**
-     * Creates admin lead.
+     * Adds an enquiry entered by staff to the same sales inbox. The selected discovery form
+     * becomes its service interest. This intake path does not send a notification.
      *
-     * @param request input carrying create admin lead intake
+     * @param request contact and business details entered by staff
      * @param formKey key selecting the discovery questionnaire
-     * @return the lead response
+     * @return the enquiry created from the staff intake
      */
     public LeadResponse createAdminLead(CreateAdminLeadIntakeRequest request, String formKey) {
         return map(saveLead(
@@ -83,9 +85,9 @@ public class LeadService {
     }
 
     /**
-     * Returns all leads.
+     * Lists the consultancy’s enquiries, newest first. The result is empty for a new inbox.
      *
-     * @return the lead response items
+     * @return a snapshot of each enquiry in creation order, newest first
      */
     public List<LeadResponse> getAllLeads() {
         return leadRepository.findAllByOrderByCreatedAtDesc()
@@ -95,10 +97,10 @@ public class LeadService {
     }
 
     /**
-     * Retrieves lead by id. Looks up the referenced record by identifier.
+     * Loads a single sales enquiry so staff can open its detail view.
      *
      * @param id unique identifier of the record
-     * @return identifier of the lead by
+     * @return the enquiry’s contact details, business context and current status
      * @throws com.altaira.backend.exception.LeadNotFoundException if the sales enquiry does not exist
      */
     public LeadResponse getLeadById(UUID id) {
@@ -109,11 +111,12 @@ public class LeadService {
     }
 
     /**
-     * Updates status. Persists changes through {@code leadRepository}.
+     * Parses a status label and saves it on an existing sales enquiry.
      *
      * @param id unique identifier of the record
-     * @param status current state in the workflow
-     * @return the lead response
+     * @param status requested status, matched after trimming whitespace and ignoring case
+     * @throws com.altaira.backend.exception.InvalidLeadStatusException if the label is blank or unrecognized
+     * @return the enquiry with its updated status
      * @throws com.altaira.backend.exception.LeadNotFoundException if the sales enquiry does not exist
      */
     public LeadResponse updateStatus(UUID id, String status) {
@@ -130,15 +133,16 @@ public class LeadService {
     }
 
     /**
-     * Saves lead. Persists changes through {@code leadRepository}. Uses locale-independent case normalization.
+     * Creates the database row shared by the public and staff intake paths. Each enquiry starts
+     * in {@link LeadStatus#NEW} with a creation time and a lowercase contact email.
      *
      * @param fullName name as displayed to a person
      * @param businessName name used by the business
      * @param email contact email address
      * @param phone contact telephone number
-     * @param industry industry
-     * @param serviceInterest service interest
-     * @param goals goals
+     * @param industry business sector, if supplied
+     * @param serviceInterest requested service or questionnaire key selected by staff
+     * @param goals work the prospective customer wants help with
      * @return the lead record
      */
     private LeadEntity saveLead(
@@ -164,7 +168,7 @@ public class LeadService {
     }
 
     /**
-     * Trims surrounding whitespace. Absent values use an empty string.
+     * Normalizes a required text field after validation at the API boundary.
      *
      * @param value stored or supplied representation
      * @return the resulting text
@@ -174,7 +178,7 @@ public class LeadService {
     }
 
     /**
-     * Trims surrounding whitespace. Absent values use an empty string.
+     * Stores an omitted or blank optional field as an empty string.
      *
      * @param value stored or supplied representation
      * @return the resulting text
@@ -188,10 +192,11 @@ public class LeadService {
     }
 
     /**
-     * Builds {@code LeadResponse} from {@code LeadEntity}, selecting the fields used by the caller.
+     * Copies a database row into the response returned by the API. The caller can attach
+     * a notification outcome when a public form submission triggered an email.
      *
-     * @param entity record carrying lead
-     * @return the lead response
+     * @param entity saved sales enquiry
+     * @return the contact, business and workflow details of the enquiry
      */
     private LeadResponse map(LeadEntity entity) {
         return new LeadResponse(
