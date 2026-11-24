@@ -27,6 +27,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/** Exercises commercial flow integration behavior with JUnit. */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:commercial_flow_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
         "altaira.commercial.legacy-direct-conversion-enabled=false",
@@ -43,25 +44,47 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 })
 @ActiveProfiles("test")
 class CommercialFlowIntegrationTests {
+    /** Webhook secret used by commercial flow integration tests. */
     private static final String WEBHOOK_SECRET = "whsec_test_commercial_flow";
 
+    /** Commercial flow operations used by this component. */
     @Autowired private CommercialFlowService commercialFlowService;
+    /** Lead conversion operations used by this component. */
     @Autowired private LeadConversionService leadConversionService;
+    /** Persistence access for lead. */
     @Autowired private LeadRepository leadRepository;
+    /** Persistence access for assessment. */
     @Autowired private LeadAssessmentRepository assessmentRepository;
+    /** Persistence access for plan. */
     @Autowired private ProvisioningPlanRepository planRepository;
+    /** Persistence access for plan item. */
     @Autowired private ProvisioningPlanItemRepository planItemRepository;
+    /** Persistence access for client. */
     @Autowired private ClientRepository clientRepository;
+    /** Persistence access for workspace. */
     @Autowired private ClientWorkspaceRepository workspaceRepository;
+    /** Persistence access for invitation. */
     @Autowired private ClientInvitationRepository invitationRepository;
+    /** Persistence access for flow. */
     @Autowired private CommercialFlowRepository flowRepository;
+    /** Persistence access for payment session. */
     @Autowired private CommercialPaymentSessionRepository paymentSessionRepository;
+    /** Persistence access for payment event. */
     @Autowired private CommercialPaymentEventRepository paymentEventRepository;
+    /** Persistence access for commercial email log. */
     @Autowired private CommercialEmailLogRepository commercialEmailLogRepository;
+    /** Persistence access for run. */
     @Autowired private ProvisioningRunRepository runRepository;
+    /** Persistence access for step. */
     @Autowired private ProvisioningStepRepository stepRepository;
+    /** Jackson mapper used to read or write JSON. */
     @Autowired private ObjectMapper objectMapper;
 
+    /**
+     * Regression case: signed webhook activates once and keeps providers in dry run.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void signedWebhookActivatesOnceAndKeepsProvidersInDryRun() throws Exception {
         ProvisioningPlanEntity plan = approvedPlan();
@@ -131,6 +154,12 @@ class CommercialFlowIntegrationTests {
                 .isEqualTo(ProvisioningPlanStatus.PARTIALLY_COMPLETED.value());
     }
 
+    /**
+     * Builds the provisioning plan entity fixture used by the commercial flow integration tests.
+     *
+     * @return the provisioning plan record
+     * @throws Exception if the operation cannot complete
+     */
     private ProvisioningPlanEntity approvedPlan() throws Exception {
         LeadEntity lead = new LeadEntity();
         lead.setFullName("Commercial Test Owner");
@@ -187,6 +216,13 @@ class CommercialFlowIntegrationTests {
         return plan;
     }
 
+    /**
+     * Supplies a track fixture for the commercial or provisioning scenario.
+     *
+     * @param track service track within the delivery plan
+     * @param route delivery route selected by the planning policy
+     * @return the resulting key–value pairs
+     */
     private Map<String, Object> track(String track, String route) {
         return Map.ofEntries(
                 Map.entry("track", track),
@@ -203,6 +239,14 @@ class CommercialFlowIntegrationTests {
         );
     }
 
+    /**
+     * Builds the string fixture used by the commercial flow integration tests.
+     *
+     * @param payload data passed across this boundary
+     * @param secret secret
+     * @return the resulting text
+     * @throws Exception if the operation cannot complete
+     */
     private String stripeSignature(String payload, String secret) throws Exception {
         long timestamp = Instant.now().getEpochSecond();
         Mac mac = Mac.getInstance("HmacSHA256");

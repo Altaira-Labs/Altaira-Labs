@@ -12,13 +12,24 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/** Summarizes configuration and connectivity information available about the GitHub integration. */
 @Service
 public class GitHubIntegrationStatusService {
 
+    /** Properties. */
     private final GitHubAppProperties properties;
+    /** JWT operations used by this component. */
     private final GitHubAppJwtService jwtService;
+    /** Api client. */
     private final GitHubApiClient apiClient;
 
+    /**
+     * Creates the GitHub integration status service with its injected collaborators.
+     *
+     * @param properties properties
+     * @param jwtService JWT operations used by this component
+     * @param apiClient api client
+     */
     public GitHubIntegrationStatusService(
             GitHubAppProperties properties,
             GitHubAppJwtService jwtService,
@@ -29,6 +40,11 @@ public class GitHubIntegrationStatusService {
         this.apiClient = apiClient;
     }
 
+    /**
+     * Retrieves status.
+     *
+     * @return current state in the workflow
+     */
     public GitHubIntegrationStatusResponse getStatus() {
         List<String> errors = new ArrayList<>();
         boolean installationReachable = false;
@@ -83,6 +99,15 @@ public class GitHubIntegrationStatusService {
         return response(installationReachable, permissions, repositories, errors);
     }
 
+    /**
+     * Builds {@code GitHubIntegrationStatusResponse} from {@code boolean}, selecting the fields used by the caller.
+     *
+     * @param installationReachable installation reachable
+     * @param permissions permissions
+     * @param repositories repositories
+     * @param errors errors
+     * @return the GitHub integration status response
+     */
     private GitHubIntegrationStatusResponse response(
             boolean installationReachable,
             Map<String, String> permissions,
@@ -103,6 +128,12 @@ public class GitHubIntegrationStatusService {
         );
     }
 
+    /**
+     * Reads permissions.
+     *
+     * @param permissionsNode permissions node
+     * @return the resulting key–value pairs
+     */
     private Map<String, String> readPermissions(JsonNode permissionsNode) {
         Map<String, String> permissions = new LinkedHashMap<>();
         if (permissionsNode instanceof ObjectNode objectNode) {
@@ -111,6 +142,12 @@ public class GitHubIntegrationStatusService {
         return permissions;
     }
 
+    /**
+     * Reads repositories.
+     *
+     * @param repositoriesNode repositories node
+     * @return the GitHub repository summary items
+     */
     private List<GitHubRepositorySummary> readRepositories(JsonNode repositoriesNode) {
         List<GitHubRepositorySummary> repositories = new ArrayList<>();
         if (repositoriesNode == null || !repositoriesNode.isArray()) {

@@ -31,17 +31,34 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/** Client list/detail and administrative changes. Admin operations use explicit DTOs and state rules. */
 @Service
 @Transactional
 public class ClientManagementService {
 
+    /** Persistence access for client. */
     private final ClientRepository clientRepository;
+    /** Persistence access for lead. */
     private final LeadRepository leadRepository;
+    /** Persistence access for client service. */
     private final ClientServiceRepository clientServiceRepository;
+    /** Persistence access for client project. */
     private final ClientProjectRepository clientProjectRepository;
+    /** Persistence access for workspace task. */
     private final WorkspaceTaskRepository workspaceTaskRepository;
+    /** Persistence access for client workspace. */
     private final ClientWorkspaceRepository clientWorkspaceRepository;
 
+    /**
+     * Creates the client management service with its injected collaborators.
+     *
+     * @param clientRepository persistence access for client
+     * @param leadRepository persistence access for lead
+     * @param clientServiceRepository persistence access for client service
+     * @param clientProjectRepository persistence access for client project
+     * @param workspaceTaskRepository persistence access for workspace task
+     * @param clientWorkspaceRepository persistence access for client workspace
+     */
     public ClientManagementService(
             ClientRepository clientRepository,
             LeadRepository leadRepository,
@@ -58,6 +75,13 @@ public class ClientManagementService {
         this.clientWorkspaceRepository = clientWorkspaceRepository;
     }
 
+    /**
+     * Creates client. Persists changes through {@code clientRepository}. Uses locale-independent case normalization.
+     *
+     * @param request input carrying create client
+     * @return the client response
+     * @throws com.altaira.backend.exception.LeadNotFoundException if the sales enquiry does not exist
+     */
     public ClientResponse createClient(CreateClientRequest request) {
         LeadEntity sourceLead = null;
 
@@ -83,6 +107,13 @@ public class ClientManagementService {
         return map(clientRepository.save(entity));
     }
 
+    /**
+     * Creates client from lead. Persists changes through {@code clientRepository}.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @return the client response
+     * @throws com.altaira.backend.exception.LeadNotFoundException if the sales enquiry does not exist
+     */
     public ClientResponse createClientFromLead(UUID leadId) {
         LeadEntity lead = leadRepository.findById(leadId)
                 .orElseThrow(() -> new LeadNotFoundException(leadId));
@@ -104,6 +135,11 @@ public class ClientManagementService {
         return map(clientRepository.save(entity));
     }
 
+    /**
+     * Returns all clients.
+     *
+     * @return the client response items
+     */
     public List<ClientResponse> getAllClients() {
         return clientRepository.findAllByOrderByCreatedAtDesc()
                 .stream()
@@ -111,10 +147,21 @@ public class ClientManagementService {
                 .toList();
     }
 
+    /**
+     * Retrieves client by id.
+     *
+     * @param id unique identifier of the record
+     * @return identifier of the client by
+     */
     public ClientResponse getClientById(UUID id) {
         return map(findClientEntity(id));
     }
 
+    /**
+     * Retrieves admin client summaries.
+     *
+     * @return the admin client summary response items
+     */
     public List<AdminClientSummaryResponse> getAdminClientSummaries() {
         List<ClientEntity> clients = clientRepository.findAllByOrderByCreatedAtDesc()
                 .stream()
@@ -143,6 +190,12 @@ public class ClientManagementService {
                 .toList();
     }
 
+    /**
+     * Retrieves admin client summary.
+     *
+     * @param id unique identifier of the record
+     * @return admin client summary
+     */
     public AdminClientSummaryResponse getAdminClientSummary(UUID id) {
         ClientEntity client = findClientEntity(id);
         return mapAdminSummary(
@@ -153,11 +206,24 @@ public class ClientManagementService {
         );
     }
 
+    /**
+     * Finds client entity. Looks up the referenced record by identifier.
+     *
+     * @param id unique identifier of the record
+     * @return the client record
+     * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
+     */
     ClientEntity findClientEntity(UUID id) {
         return clientRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Client", id));
     }
 
+    /**
+     * Builds {@code ClientResponse} from {@code ClientEntity}, selecting the fields used by the caller.
+     *
+     * @param entity record carrying client
+     * @return the client response
+     */
     ClientResponse map(ClientEntity entity) {
         UUID sourceLeadId = entity.getSourceLead() == null ? null : entity.getSourceLead().getId();
 
@@ -175,6 +241,15 @@ public class ClientManagementService {
         );
     }
 
+    /**
+     * Maps admin summary.
+     *
+     * @param client customer account in scope
+     * @param services services
+     * @param projects projects
+     * @param tasks tasks
+     * @return the admin client summary response
+     */
     private AdminClientSummaryResponse mapAdminSummary(
             ClientEntity client,
             List<ClientServiceEntity> services,
@@ -229,6 +304,15 @@ public class ClientManagementService {
         );
     }
 
+    /**
+     * Combines delivery indicators into the status shown on the administrative client summary.
+     *
+     * @param client customer account in scope
+     * @param activeAssignments active assignments
+     * @param projects projects
+     * @param openTasks open tasks
+     * @return the resulting text
+     */
     private String overallState(
             ClientEntity client,
             List<ClientServiceEntity> activeAssignments,
@@ -258,6 +342,12 @@ public class ClientManagementService {
         return "no_services";
     }
 
+    /**
+     * Chooses the most recent available timestamp for the customer summary.
+     *
+     * @param values values
+     * @return the resulting instant in time
+     */
     private Instant latestInstant(Instant... values) {
         return Arrays.stream(values)
                 .filter(value -> value != null)
@@ -265,6 +355,12 @@ public class ClientManagementService {
                 .orElse(null);
     }
 
+    /**
+     * Checks whether this is technical fixture. Uses locale-independent case normalization.
+     *
+     * @param client customer account in scope
+     * @return true if the value is technical fixture
+     */
     private boolean isTechnicalFixture(ClientEntity client) {
         String name = client.getName() == null ? "" : client.getName().trim().toLowerCase(Locale.ROOT);
         String company = client.getCompany() == null ? "" : client.getCompany().trim().toLowerCase(Locale.ROOT);
@@ -277,6 +373,12 @@ public class ClientManagementService {
                 email.contains("e2e");
     }
 
+    /**
+     * Infers the customer sector from its source enquiry.
+     *
+     * @param lead sales enquiry in scope
+     * @return the resulting text
+     */
     private String inferSectorFromLead(LeadEntity lead) {
         String combined = ((lead.getIndustry() == null ? "" : lead.getIndustry()) + " " +
                 (lead.getServiceInterest() == null ? "" : lead.getServiceInterest()) + " " +
@@ -297,10 +399,22 @@ public class ClientManagementService {
         return SectorType.CUSTOM.value();
     }
 
+    /**
+     * Trims surrounding whitespace. Absent values use an empty string.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String trimRequired(String value) {
         return value == null ? "" : value.trim();
     }
 
+    /**
+     * Trims surrounding whitespace. Absent values use an empty string.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String trimOptional(String value) {
         if (value == null || value.isBlank()) {
             return "";

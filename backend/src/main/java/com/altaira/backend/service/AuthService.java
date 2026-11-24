@@ -26,17 +26,33 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.function.Predicate;
 
+/** Admin authentication and session creation. Admin credentials remain backend-only. */
 @Service
 @Transactional
 public class AuthService {
 
+    /** Persistence access for app user. */
     private final AppUserRepository appUserRepository;
+    /** Persistence access for app user session. */
     private final AppUserSessionRepository appUserSessionRepository;
+    /** Security event operations used by this component. */
     private final SecurityEventService securityEventService;
+    /** Encoder used to compare or store credential hashes. */
     private final PasswordEncoder passwordEncoder;
+    /** Session hours. */
     private final long sessionHours;
+    /** Secure random. */
     private final SecureRandom secureRandom = new SecureRandom();
 
+    /**
+     * Creates the auth service with its injected collaborators.
+     *
+     * @param appUserRepository persistence access for app user
+     * @param appUserSessionRepository persistence access for app user session
+     * @param securityEventService security event operations used by this component
+     * @param passwordEncoder encoder used to compare or store credential hashes
+     * @param sessionHours session hours
+     */
     public AuthService(
             AppUserRepository appUserRepository,
             AppUserSessionRepository appUserSessionRepository,
@@ -51,18 +67,53 @@ public class AuthService {
         this.sessionHours = sessionHours;
     }
 
+    /**
+     * Authenticates the supplied credentials for the supported sign-in flow.
+     *
+     * @param request input carrying login
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @return the login response
+     */
     public LoginResponse login(LoginRequest request, String ipAddress, String userAgent) {
         return loginForAudience(request, ipAddress, userAgent, role -> true, null);
     }
 
+    /**
+     * Restricts sign-in to the staff audience.
+     *
+     * @param request input carrying login
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @return the login response
+     */
     public LoginResponse loginAdmin(LoginRequest request, String ipAddress, String userAgent) {
         return loginForAudience(request, ipAddress, userAgent, UserRole::isAdminRole, "Admin role required");
     }
 
+    /**
+     * Restricts sign-in to the client-workspace audience.
+     *
+     * @param request input carrying login
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @return the login response
+     */
     public LoginResponse loginClient(LoginRequest request, String ipAddress, String userAgent) {
         return loginForAudience(request, ipAddress, userAgent, UserRole::isClientRole, "Client role required");
     }
 
+    /**
+     * Checks the active account and password first, then checks whether the account’s role is permitted in this login area. Failed attempts and successful sessions produce security events.
+     *
+     * @param request input carrying login
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @param allowedRole predicate deciding whether the account may sign in to the selected audience
+     * @param roleError message returned when the account role is outside the selected audience
+     * @return the login response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (unauthorized, forbidden)
+     */
     private LoginResponse loginForAudience(
             LoginRequest request,
             String ipAddress,
@@ -106,10 +157,29 @@ public class AuthService {
         return createSessionForUser(entity, ipAddress, userAgent, "Session created");
     }
 
+    /**
+     * Revokes earlier sessions, stores a digest of the new token and returns the bearer token with its expiry to the caller.
+     *
+     * @param entity record carrying app user
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @param metadata additional context recorded with the event
+     * @return the login response
+     */
     public LoginResponse createSessionForUser(AppUserEntity entity, String ipAddress, String userAgent, String metadata) {
         return createSessionForUser(entity, ipAddress, userAgent, metadata, true);
     }
 
+    /**
+     * Revokes earlier sessions, stores a digest of the new token and returns the bearer token with its expiry to the caller.
+     *
+     * @param entity record carrying app user
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @param metadata additional context recorded with the event
+     * @param linkSecurityEventToUser whether the security event should reference the account
+     * @return the login response
+     */
     public LoginResponse createSessionForUser(AppUserEntity entity, String ipAddress, String userAgent, String metadata, boolean linkSecurityEventToUser) {
         Instant now = Instant.now();
         entity.setLastLoginAt(now);
@@ -137,15 +207,34 @@ public class AuthService {
         return new LoginResponse(sessionToken, expiresAt, mapUser(entity));
     }
 
+    /**
+     * Looks up the active session and returns the account fields used by the signed-in interface.
+     *
+     * @param sessionToken credential used to identify the current session
+     * @return current user
+     */
     public AuthUserResponse getCurrentUser(String sessionToken) {
         AppUserSessionEntity session = findUsableSession(sessionToken);
         return mapUser(session.getUser());
     }
 
+    /**
+     * Returns the account behind a currently usable session. The caller can then check membership or roles.
+     *
+     * @param sessionToken credential used to identify the current session
+     * @return current user entity
+     */
     public AppUserEntity getCurrentUserEntity(String sessionToken) {
         return findUsableSession(sessionToken).getUser();
     }
 
+    /**
+     * Revokes the session identified by the supplied token.
+     *
+     * @param sessionToken credential used to identify the current session
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     */
     public void logout(String sessionToken, String ipAddress, String userAgent) {
         if (sessionToken == null || sessionToken.isBlank()) {
             return;
@@ -168,6 +257,13 @@ public class AuthService {
                 });
     }
 
+    /**
+     * Resolves the token digest to a session and rejects expired or revoked sessions and inactive accounts.
+     *
+     * @param sessionToken credential used to identify the current session
+     * @return the app user session record
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (unauthorized)
+     */
     AppUserSessionEntity findUsableSession(String sessionToken) {
         if (sessionToken == null || sessionToken.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing admin session");
@@ -183,6 +279,12 @@ public class AuthService {
         return session;
     }
 
+    /**
+     * Builds the account view with the identifier, username, role, activation state and last login.
+     *
+     * @param user user account in scope
+     * @return the auth user response
+     */
     public AuthUserResponse mapUser(AppUserEntity user) {
         return new AuthUserResponse(
                 user.getId(),
@@ -193,6 +295,12 @@ public class AuthService {
         );
     }
 
+    /**
+     * Marks open sessions for the account as revoked when a new login supersedes them.
+     *
+     * @param user user account in scope
+     * @param now now
+     */
     private void revokeExistingSessions(AppUserEntity user, Instant now) {
         appUserSessionRepository.findAllByUserAndRevokedAtIsNull(user)
                 .forEach(session -> {
@@ -202,6 +310,13 @@ public class AuthService {
                 });
     }
 
+    /**
+     * Derives the digest used to look up a session without storing the bearer token itself.
+     *
+     * @param sessionToken credential used to identify the current session
+     * @return the resulting text
+     * @throws IllegalStateException when validation reports “SHA-256 is not available”
+     */
     public String hashToken(String sessionToken) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -212,12 +327,23 @@ public class AuthService {
         }
     }
 
+    /**
+     * Creates session token.
+     *
+     * @return the resulting text
+     */
     private String createSessionToken() {
         byte[] tokenBytes = new byte[32];
         secureRandom.nextBytes(tokenBytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
     }
 
+    /**
+     * Normalizes username.
+     *
+     * @param username account name used to identify the user
+     * @return the resulting text
+     */
     private String normalizeUsername(String username) {
         if (username == null) {
             return "";

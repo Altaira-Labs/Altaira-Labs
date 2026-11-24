@@ -1,26 +1,13 @@
-# Altaira Workspace Setup
+# Altaira Workspace setup
 
-This project is currently stabilized as a lead capture and lead management MVP base. Do not add client or service management features until the lead workflow is reliable and accepted for the next sprint.
+Clone the organization repository and open its root directory. The frontend lives at the root and the Spring Boot application lives in `backend/`.
 
-## Official Workspace
-
-Use this folder as the official local source of truth:
-
-```text
-/Volumes/T7/Altaira_Labs/Altaira_Labs_web
+```sh
+git clone https://github.com/Altaira-Labs/Altaira-Labs.git
+cd Altaira-Labs
 ```
 
-It is a Git checkout of:
-
-```text
-https://github.com/Adnanne-Bourhayal/Altaira-Labs.git
-```
-
-Current stabilization branch:
-
-```bash
-git status --short --branch
-```
+The backend tests use isolated fixtures. Running the two examples in the [README](../README.md) requires a JDK 21 installation and no account on a deployed workspace.
 
 ## Required Tools
 

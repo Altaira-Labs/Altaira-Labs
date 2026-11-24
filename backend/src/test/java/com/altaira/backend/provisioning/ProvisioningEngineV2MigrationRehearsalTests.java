@@ -39,17 +39,31 @@ import java.util.UUID;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * Exercises provisioning engine v2 migration rehearsal behavior with JUnit. Individual cases include {@code additiveMigrationPreservesV1AndPersistsV2Payloads} and {@code planReaderHandlesLegacyEmptyAndMalformedPayloadsDefensively}.
+ */
 class ProvisioningEngineV2MigrationRehearsalTests {
 
+    /** Jdbc URL used by provisioning engine v2 migration rehearsal tests. */
     private static final String JDBC_URL = "jdbc:h2:mem:provisioning_v2_migration_rehearsal;"
             + "MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1";
+    /** Migration file used by provisioning engine v2 migration rehearsal tests. */
     private static final String MIGRATION_FILE = "backend/database/provisioning-engine-v2-visibility-migration.sql";
+    /** V1 plan id used by provisioning engine v2 migration rehearsal tests. */
     private static final UUID V1_PLAN_ID = UUID.fromString("00000000-0000-0000-0000-000000000101");
+    /** V2 plan id used by provisioning engine v2 migration rehearsal tests. */
     private static final UUID V2_PLAN_ID = UUID.fromString("00000000-0000-0000-0000-000000000102");
+    /** Empty plan id used by provisioning engine v2 migration rehearsal tests. */
     private static final UUID EMPTY_PLAN_ID = UUID.fromString("00000000-0000-0000-0000-000000000103");
 
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * Regression case: additive migration preserves v1 and persists v2 payloads.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void additiveMigrationPreservesV1AndPersistsV2Payloads() throws Exception {
         assertSafeDatasourceAndPrintChecklist();
@@ -85,6 +99,7 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         }
     }
 
+    /** Regression case: plan reader handles legacy empty and malformed payloads defensively. */
     @Test
     void planReaderHandlesLegacyEmptyAndMalformedPayloadsDefensively() {
         ProvisioningPlanRepository planRepository = mock(ProvisioningPlanRepository.class);
@@ -152,6 +167,7 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         );
     }
 
+    /** Performs the assert safe datasource and print checklist operation. */
     private void assertSafeDatasourceAndPrintChecklist() {
         List<String> remoteVariables = List.of("DATABASE_URL", "SPRING_DATASOURCE_URL").stream()
                 .filter(key -> isRemoteDatasource(System.getenv(key)))
@@ -174,6 +190,12 @@ class ProvisioningEngineV2MigrationRehearsalTests {
                 """);
     }
 
+    /**
+     * Checks whether this is remote datasource. Uses locale-independent case normalization.
+     *
+     * @param value stored or supplied representation
+     * @return true if the value is remote datasource
+     */
     private boolean isRemoteDatasource(String value) {
         if (value == null || value.isBlank()) return false;
         String normalized = value.toLowerCase(Locale.ROOT);
@@ -184,6 +206,12 @@ class ProvisioningEngineV2MigrationRehearsalTests {
                 || normalized.contains("jdbc:postgresql://");
     }
 
+    /**
+     * Creates legacy schema.
+     *
+     * @param connection connection
+     * @throws SQLException if the database rejects the operation
+     */
     private void createLegacySchema(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             statement.execute("CREATE SCHEMA IF NOT EXISTS public");
@@ -209,6 +237,12 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         }
     }
 
+    /**
+     * Inserts a pre-migration plan for the compatibility check.
+     *
+     * @param connection connection
+     * @throws SQLException if the database rejects the operation
+     */
     private void insertLegacyPlan(Connection connection) throws SQLException {
         insertPlan(
                 connection,
@@ -221,6 +255,12 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         );
     }
 
+    /**
+     * Inserts a plan containing the version-two decision fields.
+     *
+     * @param connection connection
+     * @throws SQLException if the database rejects the operation
+     */
     private void insertV2Plan(Connection connection) throws SQLException {
         insertPlan(
                 connection,
@@ -233,6 +273,12 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         );
     }
 
+    /**
+     * Inserts a fixture whose planning arrays are explicitly empty.
+     *
+     * @param connection connection
+     * @throws SQLException if the database rejects the operation
+     */
     private void insertExplicitEmptyPlan(Connection connection) throws SQLException {
         insertPlan(
                 connection,
@@ -245,6 +291,18 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         );
     }
 
+    /**
+     * Writes the selected plan fixture into the temporary migration-test database.
+     *
+     * @param connection connection
+     * @param id unique identifier of the record
+     * @param route delivery route selected by the planning policy
+     * @param reason explanation of the decision
+     * @param tracksJson JSON representation of tracks
+     * @param sharedResourcesJson JSON representation of shared resources
+     * @param includeV2Columns include v2 columns
+     * @throws SQLException if the database rejects the operation
+     */
     private void insertPlan(
             Connection connection,
             UUID id,
@@ -282,6 +340,13 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         }
     }
 
+    /**
+     * Executes migration.
+     *
+     * @param connection connection
+     * @throws IOException if the underlying input or output cannot be completed
+     * @throws SQLException if the database rejects the operation
+     */
     private void executeMigration(Connection connection) throws IOException, SQLException {
         Path migration = locateRepositoryRoot().resolve(MIGRATION_FILE);
         String sql = Files.readString(migration);
@@ -296,6 +361,11 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         }
     }
 
+    /**
+     * Locates the project files used by the local migration rehearsal.
+     *
+     * @return the resolved file location
+     */
     private Path locateRepositoryRoot() {
         Path current = Path.of("").toAbsolutePath().normalize();
         for (Path candidate = current; candidate != null; candidate = candidate.getParent()) {
@@ -306,6 +376,13 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         throw new IllegalStateException("Altaira_Labs_web repository root could not be located from " + current);
     }
 
+    /**
+     * Reads columns.
+     *
+     * @param connection connection
+     * @return the string items
+     * @throws SQLException if the database rejects the operation
+     */
     private Set<String> readColumns(Connection connection) throws SQLException {
         Set<String> columns = new LinkedHashSet<>();
         try (PreparedStatement statement = connection.prepareStatement("""
@@ -321,6 +398,13 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         return columns;
     }
 
+    /**
+     * Checks how a new array-valued column is initialized by the migration.
+     *
+     * @param connection connection
+     * @param column column
+     * @throws SQLException if the database rejects the operation
+     */
     private void assertArrayDefault(Connection connection, String column) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT column_default, is_nullable
@@ -336,6 +420,12 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         }
     }
 
+    /**
+     * Checks that the older plan remains readable after the migration.
+     *
+     * @param connection connection
+     * @throws SQLException if the database rejects the operation
+     */
     private void assertLegacyPlanPreserved(Connection connection) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT route_key, decision_reason, tracks_json, shared_resources_json
@@ -352,6 +442,12 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         }
     }
 
+    /**
+     * Checks that the version-two decision survives a write and read of the database.
+     *
+     * @param connection connection
+     * @throws Exception if the operation cannot complete
+     */
     private void assertV2RoundTrip(Connection connection) throws Exception {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT tracks_json, shared_resources_json
@@ -376,6 +472,12 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         }
     }
 
+    /**
+     * Checks that explicitly empty arrays remain empty after the migration.
+     *
+     * @param connection connection
+     * @throws Exception if the operation cannot complete
+     */
     private void assertExplicitEmptyArrays(Connection connection) throws Exception {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT tracks_json, shared_resources_json
@@ -390,6 +492,13 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         }
     }
 
+    /**
+     * Counts plans.
+     *
+     * @param connection connection
+     * @return the value produced by this operation
+     * @throws SQLException if the database rejects the operation
+     */
     private int countPlans(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement();
              ResultSet row = statement.executeQuery("SELECT count(*) FROM public.provisioning_plans")) {
@@ -398,6 +507,11 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         }
     }
 
+    /**
+     * Reads the stored plan into the structure used by the migration assertions.
+     *
+     * @return the provisioning plan record
+     */
     private ProvisioningPlanEntity readablePlan() {
         LeadEntity lead = new LeadEntity();
         lead.setId(UUID.fromString("00000000-0000-0000-0000-000000000201"));
@@ -424,6 +538,11 @@ class ProvisioningEngineV2MigrationRehearsalTests {
         return plan;
     }
 
+    /**
+     * Supplies the version-two service tracks as a JSON fixture.
+     *
+     * @return the resulting text
+     */
     private String v2TracksJson() {
         return """
                 [{
@@ -442,6 +561,11 @@ class ProvisioningEngineV2MigrationRehearsalTests {
                 """;
     }
 
+    /**
+     * Supplies the version-two shared resources as a JSON fixture.
+     *
+     * @return the resulting text
+     */
     private String v2SharedResourcesJson() {
         return """
                 [{

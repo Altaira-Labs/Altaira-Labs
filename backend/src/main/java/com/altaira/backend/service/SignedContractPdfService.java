@@ -18,15 +18,30 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 
+/** Builds the PDF evidence of an accepted commercial agreement. */
 @Service
 public class SignedContractPdfService {
 
+    /** Contract PDF path. */
     private final String contractPdfPath;
 
+    /**
+     * Constructs {@code SignedContractPdfService} using the supplied contract PDF path.
+     *
+     * @param contractPdfPath contract PDF path
+     */
     public SignedContractPdfService(@Value("${altaira.onboarding.contract-pdf-path:}") String contractPdfPath) {
         this.contractPdfPath = contractPdfPath == null ? "" : contractPdfPath.trim();
     }
 
+    /**
+     * Builds signed contract evidence.
+     *
+     * @param client customer account in scope
+     * @param task task
+     * @return the resulting binary content
+     * @throws IllegalStateException when validation reports “Could not create signed contract PDF evidence”
+     */
     public byte[] buildSignedContractEvidence(ClientEntity client, OnboardingTaskEntity task) {
         try {
             if (!contractPdfPath.isBlank()) {
@@ -42,6 +57,15 @@ public class SignedContractPdfService {
         }
     }
 
+    /**
+     * Adds the acceptance evidence to the existing contract PDF.
+     *
+     * @param contractFile contract file
+     * @param client customer account in scope
+     * @param task task
+     * @return the resulting binary content
+     * @throws IOException if the underlying input or output cannot be completed
+     */
     private byte[] stampExistingContract(File contractFile, ClientEntity client, OnboardingTaskEntity task) throws IOException {
         try (PDDocument document = Loader.loadPDF(contractFile)) {
             PDPage page = document.getPage(document.getNumberOfPages() - 1);
@@ -67,6 +91,14 @@ public class SignedContractPdfService {
         }
     }
 
+    /**
+     * Creates signature receipt. Persists changes through {@code document}.
+     *
+     * @param client customer account in scope
+     * @param task task
+     * @return the resulting binary content
+     * @throws IOException if the underlying input or output cannot be completed
+     */
     private byte[] createSignatureReceipt(ClientEntity client, OnboardingTaskEntity task) throws IOException {
         try (PDDocument document = new PDDocument()) {
             PDPage page = new PDPage(PDRectangle.A4);
@@ -97,6 +129,13 @@ public class SignedContractPdfService {
         }
     }
 
+    /**
+     * Assembles the lines of the contract acceptance receipt.
+     *
+     * @param client customer account in scope
+     * @param task task
+     * @return the string items
+     */
     private List<String> receiptLines(ClientEntity client, OnboardingTaskEntity task) {
         return List.of(
                 "Client: " + nullSafe(client.getCompany()),
@@ -115,6 +154,13 @@ public class SignedContractPdfService {
         );
     }
 
+    /**
+     * Formats one entry in the contract acceptance evidence.
+     *
+     * @param client customer account in scope
+     * @param task task
+     * @return the resulting text
+     */
     private String auditLine(ClientEntity client, OnboardingTaskEntity task) {
         return "client=" + nullSafe(client.getId()) +
                 "; signer=" + nullSafe(task.getSignatureFullName()) +
@@ -123,14 +169,31 @@ public class SignedContractPdfService {
                 "; ip=" + nullSafe(task.getSignedIp());
     }
 
+    /**
+     * Normalizes text before inserting it into a PDF text stream.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String cleanPdfText(String value) {
         return nullSafe(value).replaceAll("[\\r\\n\\t]+", " ");
     }
 
+    /**
+     * Returns text suitable for the document when the source may be null.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String nullSafe(Object value) {
         return value == null ? "" : String.valueOf(value);
     }
 
+    /**
+     * Loads the fonts used to render the contract.
+     *
+     * @return the pd font set
+     */
     private PDFontSet fonts() {
         return new PDFontSet(
                 new PDType1Font(Standard14Fonts.FontName.HELVETICA),
@@ -138,5 +201,11 @@ public class SignedContractPdfService {
         );
     }
 
+    /**
+     * Groups the pd font set data used by signed contract PDF service.
+     *
+     * @param regular regular
+     * @param bold bold
+     */
     private record PDFontSet(PDType1Font regular, PDType1Font bold) {}
 }

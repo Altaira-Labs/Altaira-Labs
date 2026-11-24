@@ -32,15 +32,32 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * Admin/client task views and status transitions. Altaira tasks are the client-visible source of truth.
+ */
 @Service
 public class WorkspaceTaskService {
 
+    /** Persistence access for workspace task. */
     private final WorkspaceTaskRepository workspaceTaskRepository;
+    /** Persistence access for client. */
     private final ClientRepository clientRepository;
+    /** Persistence access for client workspace. */
     private final ClientWorkspaceRepository clientWorkspaceRepository;
+    /** Persistence access for client service. */
     private final ClientServiceRepository clientServiceRepository;
+    /** Persistence access for client project. */
     private final ClientProjectRepository clientProjectRepository;
 
+    /**
+     * Creates the workspace task service with its injected collaborators.
+     *
+     * @param workspaceTaskRepository persistence access for workspace task
+     * @param clientRepository persistence access for client
+     * @param clientWorkspaceRepository persistence access for client workspace
+     * @param clientServiceRepository persistence access for client service
+     * @param clientProjectRepository persistence access for client project
+     */
     public WorkspaceTaskService(
             WorkspaceTaskRepository workspaceTaskRepository,
             ClientRepository clientRepository,
@@ -55,6 +72,11 @@ public class WorkspaceTaskService {
         this.clientProjectRepository = clientProjectRepository;
     }
 
+    /**
+     * Lists for admin.
+     *
+     * @return the workspace task response items
+     */
     @Transactional(readOnly = true)
     public List<WorkspaceTaskResponse> listForAdmin() {
         return workspaceTaskRepository.findAllByOrderByCreatedAtDesc().stream()
@@ -64,6 +86,12 @@ public class WorkspaceTaskService {
                 .toList();
     }
 
+    /**
+     * Lists the tasks the signed-in customer may see in their selected workspace.
+     *
+     * @param context context carrying client access
+     * @return the workspace task response items
+     */
     @Transactional(readOnly = true)
     public List<WorkspaceTaskResponse> listForClient(ClientAccessContext context) {
         return workspaceTaskRepository
@@ -77,6 +105,13 @@ public class WorkspaceTaskService {
                 .toList();
     }
 
+    /**
+     * Lists for admin client preview. Looks up the referenced record by identifier.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @return the workspace task response items
+     * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
+     */
     @Transactional(readOnly = true)
     public List<WorkspaceTaskResponse> listForAdminClientPreview(UUID clientId) {
         ClientEntity client = clientRepository.findById(clientId)
@@ -93,6 +128,15 @@ public class WorkspaceTaskService {
                 .toList();
     }
 
+    /**
+     * Creates for admin. Persists changes through {@code workspaceTaskRepository}.
+     *
+     * @param request input carrying create workspace task
+     * @param adminUser internal user performing the action
+     * @return the workspace task response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (bad request)
+     * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
+     */
     @Transactional
     public WorkspaceTaskResponse createForAdmin(CreateWorkspaceTaskRequest request, AppUserEntity adminUser) {
         ClientEntity client = clientRepository.findById(request.getClientId())
@@ -131,6 +175,13 @@ public class WorkspaceTaskService {
         return toResponse(workspaceTaskRepository.save(task));
     }
 
+    /**
+     * Updates for admin. Persists changes through {@code workspaceTaskRepository}.
+     *
+     * @param taskId identifier of the task being acted on
+     * @param request input carrying update workspace task
+     * @return the workspace task response
+     */
     @Transactional
     public WorkspaceTaskResponse updateForAdmin(UUID taskId, UpdateWorkspaceTaskRequest request) {
         WorkspaceTaskEntity task = findTask(taskId);
@@ -163,11 +214,22 @@ public class WorkspaceTaskService {
         return toResponse(workspaceTaskRepository.save(task));
     }
 
+    /**
+     * Deletes for admin. Persists changes through {@code workspaceTaskRepository}.
+     *
+     * @param taskId identifier of the task being acted on
+     */
     @Transactional
     public void deleteForAdmin(UUID taskId) {
         workspaceTaskRepository.delete(findTask(taskId));
     }
 
+    /**
+     * Creates workspace. Persists changes through {@code clientWorkspaceRepository}.
+     *
+     * @param client customer account in scope
+     * @return the client workspace record
+     */
     private ClientWorkspaceEntity createWorkspace(ClientEntity client) {
         ClientWorkspaceEntity workspace = new ClientWorkspaceEntity();
         workspace.setClient(client);
@@ -175,6 +237,15 @@ public class WorkspaceTaskService {
         return clientWorkspaceRepository.save(workspace);
     }
 
+    /**
+     * Resolves client service. Looks up the referenced record by identifier.
+     *
+     * @param client customer account in scope
+     * @param clientServiceId identifier of the service assignment for this client
+     * @return the client service record
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (bad request)
+     * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
+     */
     private ClientServiceEntity resolveClientService(ClientEntity client, UUID clientServiceId) {
         if (clientServiceId == null) {
             return null;
@@ -190,6 +261,15 @@ public class WorkspaceTaskService {
         return clientService;
     }
 
+    /**
+     * Resolves project. Looks up the referenced record by identifier.
+     *
+     * @param client customer account in scope
+     * @param projectId identifier of the client project
+     * @return the client project record
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (bad request)
+     * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
+     */
     private ClientProjectEntity resolveProject(ClientEntity client, UUID projectId) {
         if (projectId == null) {
             return null;
@@ -205,11 +285,25 @@ public class WorkspaceTaskService {
         return project;
     }
 
+    /**
+     * Finds task. Looks up the referenced record by identifier.
+     *
+     * @param taskId identifier of the task being acted on
+     * @return the workspace task record
+     * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
+     */
     private WorkspaceTaskEntity findTask(UUID taskId) {
         return workspaceTaskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Workspace task", taskId));
     }
 
+    /**
+     * Resolves service key. Uses locale-independent case normalization.
+     *
+     * @param clientService client operations used by this component
+     * @param project project
+     * @return the resulting text
+     */
     private String resolveServiceKey(ClientServiceEntity clientService, ClientProjectEntity project) {
         if (project != null && project.getProjectKey() != null && !project.getProjectKey().isBlank()) {
             return project.getProjectKey().trim().toLowerCase(Locale.ROOT);
@@ -227,6 +321,11 @@ public class WorkspaceTaskService {
         return "general";
     }
 
+    /**
+     * Synchronizes completed at.
+     *
+     * @param task task
+     */
     private void syncCompletedAt(WorkspaceTaskEntity task) {
         WorkspaceTaskStatus status = WorkspaceTaskStatus.parse(task.getStatus());
         if (status.isFinished() && task.getCompletedAt() == null) {
@@ -236,12 +335,23 @@ public class WorkspaceTaskService {
         }
     }
 
+    /**
+     * Defines the ordering of tasks shown in a workspace.
+     *
+     * @return the value produced by this operation
+     */
     private Comparator<WorkspaceTaskEntity> taskOrder() {
         return Comparator
                 .comparing(WorkspaceTaskEntity::getDueAt, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(WorkspaceTaskEntity::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder()));
     }
 
+    /**
+     * Converts the value to response.
+     *
+     * @param task task
+     * @return response
+     */
     private WorkspaceTaskResponse toResponse(WorkspaceTaskEntity task) {
         ClientServiceEntity clientService = task.getClientService();
         ClientProjectEntity project = task.getProject();
@@ -274,6 +384,12 @@ public class WorkspaceTaskService {
         );
     }
 
+    /**
+     * Checks whether this is technical fixture.
+     *
+     * @param client customer account in scope
+     * @return true if the value is technical fixture
+     */
     private boolean isTechnicalFixture(ClientEntity client) {
         String name = normalize(client.getName());
         String company = normalize(client.getCompany());
@@ -287,10 +403,24 @@ public class WorkspaceTaskService {
                 email.contains("e2e");
     }
 
+    /**
+     * Trims whitespace and lowercases the value for comparison, using an empty string for missing input. Uses locale-independent case normalization.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String normalize(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * Requires text.
+     *
+     * @param value stored or supplied representation
+     * @param message text associated with the operation
+     * @return the resulting text
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (bad request)
+     */
     private String requireText(String value, String message) {
         String cleaned = cleanNullable(value);
         if (cleaned == null) {
@@ -299,6 +429,12 @@ public class WorkspaceTaskService {
         return cleaned;
     }
 
+    /**
+     * Trims surrounding whitespace. Absent values return null.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String cleanNullable(String value) {
         if (value == null) {
             return null;

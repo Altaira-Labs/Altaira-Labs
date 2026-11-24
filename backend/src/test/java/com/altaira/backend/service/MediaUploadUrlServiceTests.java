@@ -25,8 +25,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.ArgumentCaptor;
 
+/**
+ * Exercises media upload URL service behavior with JUnit. Individual cases include {@code reportsNotConfiguredWhenS3IsDisabled} and {@code rejectsExecutableUploadsBeforePresigning}.
+ */
 class MediaUploadUrlServiceTests {
 
+    /** Regression case: reports not configured when S3 is disabled. */
     @Test
     void reportsNotConfiguredWhenS3IsDisabled() {
         MediaUploadUrlService service = new MediaUploadUrlService(
@@ -47,6 +51,7 @@ class MediaUploadUrlServiceTests {
         assertEquals("S3 presigned uploads are not configured", ex.getReason());
     }
 
+    /** Regression case: rejects unexpected folders before attempting S3. */
     @Test
     void rejectsUnexpectedFoldersBeforeAttemptingS3() {
         MediaUploadUrlService service = new MediaUploadUrlService(
@@ -66,6 +71,11 @@ class MediaUploadUrlServiceTests {
         assertEquals("folder must be one of: branding, legal, multimedia", ex.getMessage());
     }
 
+    /**
+     * Regression case: prepares and verifies a client scoped private upload.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void preparesAndVerifiesAClientScopedPrivateUpload() throws Exception {
         S3Client s3Client = mock(S3Client.class);
@@ -120,6 +130,7 @@ class MediaUploadUrlServiceTests {
         assertEquals(128L, verified.sizeBytes());
     }
 
+    /** Regression case: rejects an object key outside the expected client context. */
     @Test
     void rejectsAnObjectKeyOutsideTheExpectedClientContext() {
         S3Client s3Client = mock(S3Client.class);
@@ -145,6 +156,7 @@ class MediaUploadUrlServiceTests {
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
     }
 
+    /** Regression case: rejects executable uploads before presigning. */
     @Test
     void rejectsExecutableUploadsBeforePresigning() {
         MediaUploadUrlService service = new MediaUploadUrlService(false, "", "", "", "", 900);
@@ -157,6 +169,13 @@ class MediaUploadUrlServiceTests {
         assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ex.getStatusCode());
     }
 
+    /**
+     * Configures the upload service for an enabled storage scenario.
+     *
+     * @param s3Client S3 client
+     * @param presigner presigner
+     * @return the media upload URL service
+     */
     private MediaUploadUrlService enabledService(S3Client s3Client, S3Presigner presigner) {
         return new MediaUploadUrlService(
                 true,
@@ -171,6 +190,14 @@ class MediaUploadUrlServiceTests {
         );
     }
 
+    /**
+     * Supplies the file details required for a private test upload.
+     *
+     * @param filename filename
+     * @param contentType media type declared for the file
+     * @param sizeBytes content length in bytes
+     * @return the prepare private upload request
+     */
     private PreparePrivateUploadRequest privateUploadRequest(String filename, String contentType, long sizeBytes) {
         PreparePrivateUploadRequest request = new PreparePrivateUploadRequest();
         request.setFilename(filename);
@@ -180,6 +207,11 @@ class MediaUploadUrlServiceTests {
         return request;
     }
 
+    /**
+     * Supplies the customer and role used to scope the upload test.
+     *
+     * @return the client access context
+     */
     private ClientAccessContext clientContext() {
         ClientEntity client = new ClientEntity();
         client.setId(UUID.fromString("b539b1ff-996d-4ed7-a26c-8086f6456691"));
@@ -189,6 +221,13 @@ class MediaUploadUrlServiceTests {
         return new ClientAccessContext(null, client, "owner");
     }
 
+    /**
+     * Constructs the example request accepted by the component under test.
+     *
+     * @param folder folder
+     * @param filename filename
+     * @return the create upload URL request
+     */
     private CreateUploadUrlRequest request(String folder, String filename) {
         CreateUploadUrlRequest request = new CreateUploadUrlRequest();
         request.setFolder(folder);

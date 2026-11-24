@@ -23,22 +23,49 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/** Persist explainable v1/v2 dry-run plans. Planning does not imply provider execution. */
 @Service
 @Transactional
 public class ProvisioningPlanService {
 
+    /** Persistence access for lead. */
     private final LeadRepository leadRepository;
+    /** Persistence access for assessment. */
     private final LeadAssessmentRepository assessmentRepository;
+    /** Persistence access for plan. */
     private final ProvisioningPlanRepository planRepository;
+    /** Persistence access for item. */
     private final ProvisioningPlanItemRepository itemRepository;
+    /** Persistence access for tool. */
     private final ProvisioningSelectedToolRepository toolRepository;
+    /** Persistence access for manual step. */
     private final ProvisioningManualStepRepository manualStepRepository;
+    /** Persistence access for external resource. */
     private final ProvisioningExternalResourceRepository externalResourceRepository;
+    /** Requirement normalizer. */
     private final ProvisioningRequirementNormalizer requirementNormalizer;
+    /** Decision engine. */
     private final ProvisioningDecisionEngine decisionEngine;
+    /** Provider registry. */
     private final ProvisioningProviderRegistry providerRegistry;
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
 
+    /**
+     * Creates the provisioning plan service with its injected collaborators.
+     *
+     * @param leadRepository persistence access for lead
+     * @param assessmentRepository persistence access for assessment
+     * @param planRepository persistence access for plan
+     * @param itemRepository persistence access for item
+     * @param toolRepository persistence access for tool
+     * @param manualStepRepository persistence access for manual step
+     * @param externalResourceRepository persistence access for external resource
+     * @param requirementNormalizer requirement normalizer
+     * @param decisionEngine decision engine
+     * @param providerRegistry provider registry
+     * @param objectMapper Jackson mapper used to read or write JSON
+     */
     public ProvisioningPlanService(
             LeadRepository leadRepository,
             LeadAssessmentRepository assessmentRepository,
@@ -65,6 +92,13 @@ public class ProvisioningPlanService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Produces and saves a delivery preview from the lead assessment. The preview explains required tools and manual work without creating external resources.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @param request input carrying create provisioning dry run
+     * @return the provisioning plan response
+     */
     public ProvisioningPlanResponse generateDryRun(UUID leadId, CreateProvisioningDryRunRequest request) {
         LeadEntity lead = findLead(leadId);
         LeadAssessmentEntity assessment = resolveAssessment(lead, request == null ? null : request.getAssessmentId());
@@ -104,6 +138,12 @@ public class ProvisioningPlanService {
         return map(plan);
     }
 
+    /**
+     * Finds the previously prepared delivery previews attached to a lead.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @return the provisioning plan response items
+     */
     @Transactional(readOnly = true)
     public List<ProvisioningPlanResponse> getPlansForLead(UUID leadId) {
         LeadEntity lead = findLead(leadId);
@@ -113,11 +153,25 @@ public class ProvisioningPlanService {
                 .toList();
     }
 
+    /**
+     * Retrieves plan.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @return proposed or saved delivery plan
+     */
     @Transactional(readOnly = true)
     public ProvisioningPlanResponse getPlan(UUID planId) {
         return map(findPlan(planId));
     }
 
+    /**
+     * Updates status. Persists changes through {@code planRepository}.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @param rawStatus raw status
+     * @return the provisioning plan response
+     * @throws IllegalArgumentException when validation reports “Dry-run plans can only be draft, awaiting_approval or approved”
+     */
     public ProvisioningPlanResponse updateStatus(UUID planId, String rawStatus) {
         ProvisioningPlanStatus status = ProvisioningPlanStatus.parse(rawStatus);
         if (!List.of(
@@ -134,6 +188,12 @@ public class ProvisioningPlanService {
         return map(planRepository.save(plan));
     }
 
+    /**
+     * Rebuilds the plan details from the latest decision for the selected assessment.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param decision decision
+     */
     private void replacePlanDetails(ProvisioningPlanEntity plan, ProvisioningDecision decision) {
         externalResourceRepository.deleteAllByPlan(plan);
         itemRepository.deleteAllByPlan(plan);
@@ -197,6 +257,14 @@ public class ProvisioningPlanService {
         }
     }
 
+    /**
+     * Resolves assessment. Looks up the referenced record by identifier.
+     *
+     * @param lead sales enquiry in scope
+     * @param assessmentId identifier of the assessment attached to the lead
+     * @return the lead assessment record
+     * @throws IllegalArgumentException when validation reports “Assessment does not belong to this lead” or “A saved lead assessment is required before generating a provisioning plan”
+     */
     private LeadAssessmentEntity resolveAssessment(LeadEntity lead, UUID assessmentId) {
         if (assessmentId != null) {
             LeadAssessmentEntity assessment = assessmentRepository.findById(assessmentId)
@@ -214,16 +282,35 @@ public class ProvisioningPlanService {
                 ));
     }
 
+    /**
+     * Finds lead. Looks up the referenced record by identifier.
+     *
+     * @param id unique identifier of the record
+     * @return the lead record
+     * @throws com.altaira.backend.exception.LeadNotFoundException if the sales enquiry does not exist
+     */
     private LeadEntity findLead(UUID id) {
         return leadRepository.findById(id)
                 .orElseThrow(() -> new LeadNotFoundException(id));
     }
 
+    /**
+     * Finds plan. Looks up the referenced record by identifier.
+     *
+     * @param id unique identifier of the record
+     * @return the provisioning plan record
+     */
     private ProvisioningPlanEntity findPlan(UUID id) {
         return planRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Provisioning plan not found: " + id));
     }
 
+    /**
+     * Builds {@code ProvisioningPlanResponse} from {@code ProvisioningPlanEntity}, selecting the fields used by the caller.
+     *
+     * @param plan proposed or saved delivery plan
+     * @return the provisioning plan response
+     */
     private ProvisioningPlanResponse map(ProvisioningPlanEntity plan) {
         List<ProvisioningPlanResponse.Tool> tools = toolRepository.findAllByPlanOrderBySortOrder(plan)
                 .stream()
@@ -300,6 +387,12 @@ public class ProvisioningPlanService {
         );
     }
 
+    /**
+     * Maps tracks.
+     *
+     * @param tracks tracks
+     * @return the track items
+     */
     private List<ProvisioningPlanResponse.Track> mapTracks(List<TrackDecision> tracks) {
         return tracks.stream()
                 .map(track -> new ProvisioningPlanResponse.Track(
@@ -334,6 +427,12 @@ public class ProvisioningPlanService {
                 .toList();
     }
 
+    /**
+     * Maps shared resources.
+     *
+     * @param resources resources
+     * @return the shared resource items
+     */
     private List<ProvisioningPlanResponse.SharedResource> mapSharedResources(
             List<SharedResourceDecision> resources
     ) {
@@ -350,6 +449,13 @@ public class ProvisioningPlanService {
                 .toList();
     }
 
+    /**
+     * Writes JSON.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     * @throws IllegalArgumentException when validation reports “Provisioning data could not be serialized”
+     */
     private String writeJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -358,6 +464,13 @@ public class ProvisioningPlanService {
         }
     }
 
+    /**
+     * Reads map.
+     *
+     * @param json JSON
+     * @return the resulting key–value pairs
+     * @throws IllegalStateException when validation reports “Stored assessment responses are invalid”
+     */
     private Map<String, Object> readMap(String json) {
         try {
             return objectMapper.readValue(json, new TypeReference<>() {});
@@ -366,6 +479,13 @@ public class ProvisioningPlanService {
         }
     }
 
+    /**
+     * Reads boolean map.
+     *
+     * @param json JSON
+     * @return the resulting key–value pairs
+     * @throws IllegalStateException when validation reports “Stored provisioning requirements are invalid”
+     */
     private Map<String, Boolean> readBooleanMap(String json) {
         try {
             return objectMapper.readValue(json, new TypeReference<>() {});
@@ -374,6 +494,13 @@ public class ProvisioningPlanService {
         }
     }
 
+    /**
+     * Reads list.
+     *
+     * @param json JSON
+     * @return the string items
+     * @throws IllegalStateException when validation reports “Stored provisioning list is invalid”
+     */
     private List<String> readList(String json) {
         try {
             return objectMapper.readValue(json, new TypeReference<>() {});
@@ -382,6 +509,13 @@ public class ProvisioningPlanService {
         }
     }
 
+    /**
+     * Reads tracks.
+     *
+     * @param json JSON
+     * @return the track items
+     * @throws IllegalStateException when validation reports “Stored provisioning tracks are invalid”
+     */
     private List<ProvisioningPlanResponse.Track> readTracks(String json) {
         if (json == null || json.isBlank()) return List.of();
         try {
@@ -391,6 +525,13 @@ public class ProvisioningPlanService {
         }
     }
 
+    /**
+     * Reads shared resources.
+     *
+     * @param json JSON
+     * @return the shared resource items
+     * @throws IllegalStateException when validation reports “Stored shared provisioning resources are invalid”
+     */
     private List<ProvisioningPlanResponse.SharedResource> readSharedResources(String json) {
         if (json == null || json.isBlank()) return List.of();
         try {

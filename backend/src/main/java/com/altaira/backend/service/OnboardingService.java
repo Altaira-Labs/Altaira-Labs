@@ -35,23 +35,52 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/** Submit, approve or reject onboarding work. Critical gates derive from real task state. */
 @Service
 @Transactional
 public class OnboardingService {
 
+    /** Client management operations used by this component. */
     private final ClientManagementService clientManagementService;
+    /** Persistence access for client service. */
     private final ClientServiceRepository clientServiceRepository;
+    /** Persistence access for client workspace. */
     private final ClientWorkspaceRepository clientWorkspaceRepository;
+    /** Persistence access for onboarding task. */
     private final OnboardingTaskRepository onboardingTaskRepository;
+    /** Persistence access for onboarding file. */
     private final OnboardingFileRepository onboardingFileRepository;
+    /** Persistence access for onboarding audit log. */
     private final OnboardingAuditLogRepository onboardingAuditLogRepository;
+    /** Onboarding template operations used by this component. */
     private final OnboardingTemplateService onboardingTemplateService;
+    /** Onboarding file storage operations used by this component. */
     private final OnboardingFileStorageService onboardingFileStorageService;
+    /** Media upload URL operations used by this component. */
     private final MediaUploadUrlService mediaUploadUrlService;
+    /** Signed contract PDF operations used by this component. */
     private final SignedContractPdfService signedContractPdfService;
+    /** Onboarding notification operations used by this component. */
     private final OnboardingNotificationService onboardingNotificationService;
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
 
+    /**
+     * Creates the onboarding service with its injected collaborators.
+     *
+     * @param clientManagementService client management operations used by this component
+     * @param clientServiceRepository persistence access for client service
+     * @param clientWorkspaceRepository persistence access for client workspace
+     * @param onboardingTaskRepository persistence access for onboarding task
+     * @param onboardingFileRepository persistence access for onboarding file
+     * @param onboardingAuditLogRepository persistence access for onboarding audit log
+     * @param onboardingTemplateService onboarding template operations used by this component
+     * @param onboardingFileStorageService onboarding file storage operations used by this component
+     * @param mediaUploadUrlService media upload URL operations used by this component
+     * @param signedContractPdfService signed contract PDF operations used by this component
+     * @param onboardingNotificationService onboarding notification operations used by this component
+     * @param objectMapper Jackson mapper used to read or write JSON
+     */
     public OnboardingService(
             ClientManagementService clientManagementService,
             ClientServiceRepository clientServiceRepository,
@@ -80,6 +109,12 @@ public class OnboardingService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Retrieves admin dashboard.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @return admin dashboard
+     */
     public OnboardingDashboardResponse getAdminDashboard(UUID clientId) {
         ClientEntity client = clientManagementService.findClientEntity(clientId);
         ClientWorkspaceEntity workspace = ensureWorkspaceAndTasks(client);
@@ -89,6 +124,12 @@ public class OnboardingService {
         return dashboard;
     }
 
+    /**
+     * Retrieves client dashboard.
+     *
+     * @param context context carrying client access
+     * @return client dashboard
+     */
     public OnboardingDashboardResponse getClientDashboard(ClientAccessContext context) {
         ClientWorkspaceEntity workspace = ensureWorkspaceAndTasks(context.client());
         OnboardingDashboardResponse dashboard = mapDashboard(workspace);
@@ -100,6 +141,12 @@ public class OnboardingService {
         return dashboard;
     }
 
+    /**
+     * Refreshes the customer’s onboarding tasks and returns the administrative dashboard.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @return the onboarding dashboard response
+     */
     public OnboardingDashboardResponse regenerateAdminDashboard(UUID clientId) {
         ClientEntity client = clientManagementService.findClientEntity(clientId);
         ClientWorkspaceEntity workspace = ensureWorkspaceAndTasks(client);
@@ -109,6 +156,16 @@ public class OnboardingService {
         return dashboard;
     }
 
+    /**
+     * Submits client task. Persists changes through {@code onboardingTaskRepository}.
+     *
+     * @param context context carrying client access
+     * @param taskId identifier of the task being acted on
+     * @param request input carrying submit onboarding task
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @return the onboarding task response
+     */
     public OnboardingTaskResponse submitClientTask(
             ClientAccessContext context,
             UUID taskId,
@@ -148,6 +205,19 @@ public class OnboardingService {
         return mapTask(saved);
     }
 
+    /**
+     * Submits client files. Persists changes through {@code onboardingTaskRepository}.
+     *
+     * @param context context carrying client access
+     * @param taskId identifier of the task being acted on
+     * @param files files
+     * @param notes free-text notes associated with the item
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @return the onboarding task response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (bad request)
+     * @throws IllegalArgumentException when validation reports “At least one file is required”
+     */
     public OnboardingTaskResponse submitClientFiles(
             ClientAccessContext context,
             UUID taskId,
@@ -219,6 +289,14 @@ public class OnboardingService {
         return mapTask(saved);
     }
 
+    /**
+     * Prepares client task upload.
+     *
+     * @param context context carrying client access
+     * @param taskId identifier of the task being acted on
+     * @param request input carrying prepare private upload
+     * @return the upload URL response
+     */
     public UploadUrlResponse prepareClientTaskUpload(
             ClientAccessContext context,
             UUID taskId,
@@ -238,6 +316,17 @@ public class OnboardingService {
         );
     }
 
+    /**
+     * Validates the uploaded file and completes its association with the onboarding task.
+     *
+     * @param context context carrying client access
+     * @param taskId identifier of the task being acted on
+     * @param request input carrying complete private upload
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @return the onboarding task response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (conflict)
+     */
     public OnboardingTaskResponse completeClientTaskUpload(
             ClientAccessContext context,
             UUID taskId,
@@ -293,6 +382,15 @@ public class OnboardingService {
         }
     }
 
+    /**
+     * Approves task. Persists changes through {@code onboardingTaskRepository}.
+     *
+     * @param taskId identifier of the task being acted on
+     * @param adminUser internal user performing the action
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @return the onboarding task response
+     */
     public OnboardingTaskResponse approveTask(UUID taskId, AppUserEntity adminUser, String ipAddress, String userAgent) {
         OnboardingTaskEntity task = findTask(taskId);
         Instant now = Instant.now();
@@ -313,6 +411,12 @@ public class OnboardingService {
         return mapTask(saved);
     }
 
+    /**
+     * Lists task files as admin.
+     *
+     * @param taskId identifier of the task being acted on
+     * @return the onboarding file response items
+     */
     @Transactional(readOnly = true)
     public List<OnboardingFileResponse> listTaskFilesAsAdmin(UUID taskId) {
         OnboardingTaskEntity task = findTask(taskId);
@@ -322,6 +426,13 @@ public class OnboardingService {
                 .toList();
     }
 
+    /**
+     * Retrieves file download as admin. Looks up the referenced record by identifier.
+     *
+     * @param fileId identifier of the file
+     * @return file download as admin
+     * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
+     */
     @Transactional(readOnly = true)
     public OnboardingFileDownload getFileDownloadAsAdmin(UUID fileId) {
         OnboardingFileEntity file = onboardingFileRepository.findById(fileId)
@@ -333,6 +444,15 @@ public class OnboardingService {
         }
     }
 
+    /**
+     * Retrieves file download. Looks up the referenced record by identifier.
+     *
+     * @param context context carrying client access
+     * @param fileId identifier of the file
+     * @return file download
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (forbidden)
+     * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
+     */
     @Transactional(readOnly = true)
     public OnboardingFileDownload getFileDownload(ClientAccessContext context, UUID fileId) {
         OnboardingFileEntity file = onboardingFileRepository.findById(fileId)
@@ -349,12 +469,24 @@ public class OnboardingService {
         }
     }
 
+    /**
+     * Ensures file upload task.
+     *
+     * @param task task
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (bad request)
+     */
     private void ensureFileUploadTask(OnboardingTaskEntity task) {
         if (OnboardingTaskType.parse(task.getTaskType()) != OnboardingTaskType.FILE_UPLOAD) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This onboarding task does not accept files");
         }
     }
 
+    /**
+     * Selects the storage folder used by this onboarding task.
+     *
+     * @param task task
+     * @return the resulting text
+     */
     private String storageFolderForTask(OnboardingTaskEntity task) {
         String context = String.join(" ",
                 task.getTaskKey() == null ? "" : task.getTaskKey(),
@@ -371,6 +503,15 @@ public class OnboardingService {
         return "multimedia";
     }
 
+    /**
+     * Marks file task submitted. Persists changes through {@code onboardingTaskRepository}.
+     *
+     * @param task task
+     * @param notes free-text notes associated with the item
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @param context context carrying client access
+     */
     private void markFileTaskSubmitted(
             OnboardingTaskEntity task,
             String notes,
@@ -406,6 +547,16 @@ public class OnboardingService {
         refreshWorkspaceStatus(saved.getWorkspace());
     }
 
+    /**
+     * Rejects task. Persists changes through {@code onboardingTaskRepository}.
+     *
+     * @param taskId identifier of the task being acted on
+     * @param feedback feedback
+     * @param adminUser internal user performing the action
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @return the onboarding task response
+     */
     public OnboardingTaskResponse rejectTask(UUID taskId, String feedback, AppUserEntity adminUser, String ipAddress, String userAgent) {
         OnboardingTaskEntity task = findTask(taskId);
         Instant now = Instant.now();
@@ -422,6 +573,12 @@ public class OnboardingService {
         return mapTask(saved);
     }
 
+    /**
+     * Ensures workspace and tasks.
+     *
+     * @param client customer account in scope
+     * @return the client workspace record
+     */
     ClientWorkspaceEntity ensureWorkspaceAndTasks(ClientEntity client) {
         ClientWorkspaceEntity workspace = clientWorkspaceRepository.findByClient(client)
                 .orElseGet(() -> createWorkspace(client));
@@ -440,6 +597,12 @@ public class OnboardingService {
         return workspace;
     }
 
+    /**
+     * Creates workspace. Persists changes through {@code clientWorkspaceRepository}.
+     *
+     * @param client customer account in scope
+     * @return the client workspace record
+     */
     private ClientWorkspaceEntity createWorkspace(ClientEntity client) {
         ClientWorkspaceEntity workspace = new ClientWorkspaceEntity();
         workspace.setClient(client);
@@ -448,6 +611,14 @@ public class OnboardingService {
         return clientWorkspaceRepository.save(workspace);
     }
 
+    /**
+     * Ensures task. Persists changes through {@code onboardingTaskRepository}.
+     *
+     * @param workspace client workspace in scope
+     * @param client customer account in scope
+     * @param clientService client operations used by this component
+     * @param template template used to construct the item
+     */
     private void ensureTask(
             ClientWorkspaceEntity workspace,
             ClientEntity client,
@@ -479,6 +650,16 @@ public class OnboardingService {
         onboardingTaskRepository.save(task);
     }
 
+    /**
+     * Applies signature submission.
+     *
+     * @param task task
+     * @param request input carrying submit onboarding task
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @param now now
+     * @throws IllegalArgumentException when validation reports “Signer full name is required” or “Document ID is required”
+     */
     private void applySignatureSubmission(
             OnboardingTaskEntity task,
             SubmitOnboardingTaskRequest request,
@@ -513,6 +694,13 @@ public class OnboardingService {
         task.getWorkspace().setContractSubmittedAt(now);
     }
 
+    /**
+     * Applies file submission.
+     *
+     * @param task task
+     * @param request input carrying submit onboarding task
+     * @throws IllegalArgumentException when validation reports “At least one file reference is required”
+     */
     private void applyFileSubmission(OnboardingTaskEntity task, SubmitOnboardingTaskRequest request) {
         if (request.getFiles() == null || request.getFiles().isEmpty()) {
             throw new IllegalArgumentException("At least one file reference is required");
@@ -522,6 +710,13 @@ public class OnboardingService {
         task.setDataJson(toJson(request.getData() == null ? Map.of() : request.getData()));
     }
 
+    /**
+     * Applies preferences submission.
+     *
+     * @param task task
+     * @param request input carrying submit onboarding task
+     * @throws IllegalArgumentException when validation reports “Preference data is required”
+     */
     private void applyPreferencesSubmission(OnboardingTaskEntity task, SubmitOnboardingTaskRequest request) {
         if (request.getData() == null || request.getData().isEmpty()) {
             throw new IllegalArgumentException("Preference data is required");
@@ -530,6 +725,11 @@ public class OnboardingService {
         task.setDataJson(toJson(request.getData()));
     }
 
+    /**
+     * Re-evaluates the workspace onboarding status from the delivery tasks and their approval state.
+     *
+     * @param workspace client workspace in scope
+     */
     private void refreshWorkspaceStatus(ClientWorkspaceEntity workspace) {
         List<OnboardingTaskEntity> tasks = onboardingTaskRepository.findAllByWorkspaceOrderBySortOrderAscCreatedAtAsc(workspace);
 
@@ -560,17 +760,42 @@ public class OnboardingService {
         }
     }
 
+    /**
+     * Finds task. Looks up the referenced record by identifier.
+     *
+     * @param taskId identifier of the task being acted on
+     * @return the onboarding task record
+     * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
+     */
     private OnboardingTaskEntity findTask(UUID taskId) {
         return onboardingTaskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Onboarding task", taskId));
     }
 
+    /**
+     * Checks that the onboarding task belongs to the selected customer before acting on it.
+     *
+     * @param task task
+     * @param client customer account in scope
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (forbidden)
+     */
     private void ensureTaskBelongsToClient(OnboardingTaskEntity task, ClientEntity client) {
         if (!task.getClient().getId().equals(client.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No access to this onboarding task");
         }
     }
 
+    /**
+     * Records audit. Persists changes through {@code onboardingAuditLogRepository}.
+     *
+     * @param task task
+     * @param actor actor
+     * @param actorRole actor role
+     * @param action action being recorded
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @param metadataJson JSON representation of metadata
+     */
     private void recordAudit(
             OnboardingTaskEntity task,
             AppUserEntity actor,
@@ -593,6 +818,12 @@ public class OnboardingService {
         onboardingAuditLogRepository.save(auditLog);
     }
 
+    /**
+     * Maps dashboard.
+     *
+     * @param workspace client workspace in scope
+     * @return the onboarding dashboard response
+     */
     private OnboardingDashboardResponse mapDashboard(ClientWorkspaceEntity workspace) {
         List<OnboardingTaskResponse> taskResponses = onboardingTaskRepository.findAllByWorkspaceOrderBySortOrderAscCreatedAtAsc(workspace)
                 .stream()
@@ -634,36 +865,78 @@ public class OnboardingService {
         );
     }
 
+    /**
+     * Checks whether this is critical signature task.
+     *
+     * @param task task
+     * @return true if the value is critical signature task
+     */
     private boolean isCriticalSignatureTask(OnboardingTaskEntity task) {
         return task.isRequired() &&
                 task.isCritical() &&
                 OnboardingTaskType.SIGNATURE.value().equals(task.getTaskType());
     }
 
+    /**
+     * Checks whether this is critical signature task.
+     *
+     * @param task task
+     * @return true if the value is critical signature task
+     */
     private boolean isCriticalSignatureTask(OnboardingTaskResponse task) {
         return task.isRequired() &&
                 task.isCritical() &&
                 OnboardingTaskType.SIGNATURE.value().equals(task.getTaskType());
     }
 
+    /**
+     * Checks whether this is submitted or approved.
+     *
+     * @param task task
+     * @return true if the value is submitted or approved
+     */
     private boolean isSubmittedOrApproved(OnboardingTaskEntity task) {
         return OnboardingTaskStatus.SUBMITTED.value().equals(task.getStatus()) ||
                 OnboardingTaskStatus.APPROVED.value().equals(task.getStatus());
     }
 
+    /**
+     * Checks whether this is submitted or approved.
+     *
+     * @param task task
+     * @return true if the value is submitted or approved
+     */
     private boolean isSubmittedOrApproved(OnboardingTaskResponse task) {
         return OnboardingTaskStatus.SUBMITTED.value().equals(task.getStatus()) ||
                 OnboardingTaskStatus.APPROVED.value().equals(task.getStatus());
     }
 
+    /**
+     * Checks whether this is approved.
+     *
+     * @param task task
+     * @return true if the value is approved
+     */
     private boolean isApproved(OnboardingTaskEntity task) {
         return OnboardingTaskStatus.APPROVED.value().equals(task.getStatus());
     }
 
+    /**
+     * Checks whether this is approved.
+     *
+     * @param task task
+     * @return true if the value is approved
+     */
     private boolean isApproved(OnboardingTaskResponse task) {
         return OnboardingTaskStatus.APPROVED.value().equals(task.getStatus());
     }
 
+    /**
+     * Maps task.
+     *
+     * @param task task
+     * @return the onboarding task response
+     */
     private OnboardingTaskResponse mapTask(OnboardingTaskEntity task) {
         UUID clientServiceId = task.getClientService() == null ? null : task.getClientService().getId();
 
@@ -696,6 +969,12 @@ public class OnboardingService {
         );
     }
 
+    /**
+     * Maps file.
+     *
+     * @param file file
+     * @return the onboarding file response
+     */
     private OnboardingFileResponse mapFile(OnboardingFileEntity file) {
         return new OnboardingFileResponse(
                 file.getId(),
@@ -709,12 +988,32 @@ public class OnboardingService {
         );
     }
 
+    /**
+     * Groups the onboarding file download data used by onboarding service.
+     *
+     * @param file file
+     * @param inputStream input stream
+     */
     public record OnboardingFileDownload(OnboardingFileEntity file, InputStream inputStream) {}
 
+    /**
+     * Collects the audit details attached to this onboarding action.
+     *
+     * @param key key used to identify the item
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String metadata(String key, String value) {
         return toJson(Map.of(key, value == null ? "" : value));
     }
 
+    /**
+     * Converts the value to JSON.
+     *
+     * @param value stored or supplied representation
+     * @return JSON
+     * @throws IllegalArgumentException when validation reports “Could not serialize onboarding data”
+     */
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -723,6 +1022,13 @@ public class OnboardingService {
         }
     }
 
+    /**
+     * Trims surrounding whitespace and caps the result at the supplied length. Absent values return null.
+     *
+     * @param value stored or supplied representation
+     * @param limit upper bound applied when reading or accepting data
+     * @return the resulting text
+     */
     private String trimToLimit(String value, int limit) {
         if (value == null || value.isBlank()) {
             return null;

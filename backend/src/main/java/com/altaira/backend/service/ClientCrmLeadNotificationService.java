@@ -21,21 +21,43 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+/** Coordinates client CRM lead notification operations in the backend. */
 @Service
 public class ClientCrmLeadNotificationService {
 
+    /** Logger for this component. */
     private static final Logger logger = LoggerFactory.getLogger(ClientCrmLeadNotificationService.class);
+    /** Min timeout ms ({@code 250}). */
     private static final long MIN_TIMEOUT_MS = 250;
 
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
+    /** Whether the capability is enabled. */
     private final boolean enabled;
+    /** Key identifying the resend API. */
     private final String resendApiKey;
+    /** URL for resend API. */
     private final URI resendApiUrl;
+    /** Notification from. */
     private final String notificationFrom;
+    /** URL for dashboard. */
     private final String dashboardUrl;
+    /** Timeout ms. */
     private final long timeoutMs;
+    /** Client used to send the outbound HTTP request. */
     private final HttpClient httpClient;
 
+    /**
+     * Constructs {@code ClientCrmLeadNotificationService} using the supplied object mapper, enabled, resend API key and remaining fields.
+     *
+     * @param objectMapper Jackson mapper used to read or write JSON
+     * @param enabled whether the capability is enabled
+     * @param resendApiKey key identifying the resend API
+     * @param resendApiUrl URL for resend API
+     * @param notificationFrom notification from
+     * @param dashboardUrl URL for dashboard
+     * @param timeoutMs timeout ms
+     */
     public ClientCrmLeadNotificationService(
             ObjectMapper objectMapper,
             @Value("${altaira.client-crm.alerts.enabled:true}") boolean enabled,
@@ -67,6 +89,14 @@ public class ClientCrmLeadNotificationService {
         );
     }
 
+    /**
+     * Sends urgent webhook lead alert.
+     *
+     * @param lead sales enquiry in scope
+     * @param initialNote initial note
+     * @param sectorFields sector fields
+     * @return the email notification result
+     */
     public EmailNotificationResult sendUrgentWebhookLeadAlert(
             ClientCrmLeadEntity lead,
             String initialNote,
@@ -137,6 +167,16 @@ public class ClientCrmLeadNotificationService {
         }
     }
 
+    /**
+     * Builds resend payload.
+     *
+     * @param lead sales enquiry in scope
+     * @param client customer account in scope
+     * @param initialNote initial note
+     * @param sectorFields sector fields
+     * @return the resulting text
+     * @throws IllegalArgumentException when validation reports “Could not serialize client CRM alert payload”
+     */
     private String buildResendPayload(
             ClientCrmLeadEntity lead,
             ClientEntity client,
@@ -163,6 +203,15 @@ public class ClientCrmLeadNotificationService {
         }
     }
 
+    /**
+     * Builds text body.
+     *
+     * @param lead sales enquiry in scope
+     * @param client customer account in scope
+     * @param initialNote initial note
+     * @param sectorFields sector fields
+     * @return the resulting text
+     */
     private String buildTextBody(
             ClientCrmLeadEntity lead,
             ClientEntity client,
@@ -206,6 +255,15 @@ public class ClientCrmLeadNotificationService {
         );
     }
 
+    /**
+     * Builds html body.
+     *
+     * @param lead sales enquiry in scope
+     * @param client customer account in scope
+     * @param initialNote initial note
+     * @param sectorFields sector fields
+     * @return the resulting text
+     */
     private String buildHtmlBody(
             ClientCrmLeadEntity lead,
             ClientEntity client,
@@ -286,6 +344,13 @@ public class ClientCrmLeadNotificationService {
         );
     }
 
+    /**
+     * Formats the lead data as rows for the notification.
+     *
+     * @param lead sales enquiry in scope
+     * @param sectorFields sector fields
+     * @return the resulting text
+     */
     private String leadRows(ClientCrmLeadEntity lead, Map<String, String> sectorFields) {
         StringBuilder rows = new StringBuilder();
         rows.append(htmlRow("Lead ID", safe(lead.getId())));
@@ -304,6 +369,13 @@ public class ClientCrmLeadNotificationService {
         return rows.toString();
     }
 
+    /**
+     * Formats one label and value as a row for the HTML email.
+     *
+     * @param label display label
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String htmlRow(String label, String value) {
         return """
                 <tr>
@@ -313,6 +385,12 @@ public class ClientCrmLeadNotificationService {
                 """.formatted(escapeHtml(label), escapeHtml(value));
     }
 
+    /**
+     * Formats sector-specific enquiry fields for the text message.
+     *
+     * @param sectorFields sector fields
+     * @return the resulting text
+     */
     private String sectorFieldsText(Map<String, String> sectorFields) {
         if (sectorFields == null || sectorFields.isEmpty()) {
             return "(none)";
@@ -328,6 +406,13 @@ public class ClientCrmLeadNotificationService {
         return builder.toString().trim();
     }
 
+    /**
+     * Builds the link from a notification to the corresponding CRM enquiry.
+     *
+     * @param lead sales enquiry in scope
+     * @param client customer account in scope
+     * @return the resulting text
+     */
     private String leadDashboardUrl(ClientCrmLeadEntity lead, ClientEntity client) {
         if (dashboardUrl.isBlank()) {
             return "";
@@ -338,6 +423,12 @@ public class ClientCrmLeadNotificationService {
                 .replace("{clientId}", safe(client.getId()));
     }
 
+    /**
+     * Formats one line of the enquiry’s notification summary.
+     *
+     * @param lead sales enquiry in scope
+     * @return the resulting text
+     */
     private String summaryLine(ClientCrmLeadEntity lead) {
         String email = safe(lead.getEmail());
         String phone = safe(lead.getPhone());
@@ -347,6 +438,12 @@ public class ClientCrmLeadNotificationService {
         return email.isBlank() ? phone : email;
     }
 
+    /**
+     * Removes line breaks and trims the text before it is used in a mail header.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String cleanSubject(String value) {
         String cleaned = safe(value).replaceAll("[\\r\\n]+", " ").trim();
         if (cleaned.isBlank()) {
@@ -355,10 +452,22 @@ public class ClientCrmLeadNotificationService {
         return cleaned.length() > 80 ? cleaned.substring(0, 80) : cleaned;
     }
 
+    /**
+     * Removes line breaks and trims the text before it is used in a mail header.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String cleanHeader(String value) {
         return safe(value).replaceAll("[\\r\\n]+", "").trim();
     }
 
+    /**
+     * Converts the stored identifier into words suitable for display.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String humanize(String value) {
         String cleaned = safe(value).replace("_", " ").trim();
         if (cleaned.isBlank()) {
@@ -368,10 +477,22 @@ public class ClientCrmLeadNotificationService {
         return cleaned.substring(0, 1).toUpperCase(Locale.ROOT) + cleaned.substring(1);
     }
 
+    /**
+     * Trims whitespace and lowercases the value for comparison, using an empty string for missing input. Uses locale-independent case normalization.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String normalize(String value) {
         return safe(value).trim().toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * Escapes special characters before embedding the value in generated markup.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String escapeHtml(String value) {
         return safe(value)
                 .replace("&", "&amp;")
@@ -381,10 +502,22 @@ public class ClientCrmLeadNotificationService {
                 .replace("'", "&#39;");
     }
 
+    /**
+     * Returns the textual representation of the value, using an empty string for null.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String safe(Object value) {
         return value == null ? "" : value.toString();
     }
 
+    /**
+     * Reduces the supplied value to a form suitable for the notification log.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String safeLogValue(String value) {
         if (value == null || value.isBlank()) {
             return "(blank)";

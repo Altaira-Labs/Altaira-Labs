@@ -4,8 +4,10 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Exercises GitHub integration exception behavior with JUnit. */
 class GitHubIntegrationExceptionTests {
 
+    /** Regression case: redacts credentials and bounds provider errors. */
     @Test
     void redactsCredentialsAndBoundsProviderErrors() {
         String repeatedText = "x".repeat(600);

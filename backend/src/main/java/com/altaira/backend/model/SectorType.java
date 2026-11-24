@@ -3,22 +3,44 @@ package com.altaira.backend.model;
 import java.util.Arrays;
 import java.util.Locale;
 
+/** Allowed sector type values understood by the backend. */
 public enum SectorType {
+    /** Represents clinics with serialized value {@code clinics}. */
     CLINICS("clinics"),
+    /** Represents restaurants with serialized value {@code restaurants}. */
     RESTAURANTS("restaurants"),
+    /** Represents car dealers with serialized value {@code car_dealers}. */
     CAR_DEALERS("car_dealers"),
+    /** Represents custom with serialized value {@code custom}. */
     CUSTOM("custom");
 
+    /** Stored or supplied representation. */
     private final String value;
 
+    /**
+     * Constructs {@code SectorType} using the supplied value.
+     *
+     * @param value stored or supplied representation
+     */
     SectorType(String value) {
         this.value = value;
     }
 
+    /**
+     * Returns the stored or supplied representation for this sector type.
+     *
+     * @return stored or supplied representation
+     */
     public String value() {
         return value;
     }
 
+    /**
+     * Resolves the supplied text to a sector type value using this enum’s accepted spellings.
+     *
+     * @param rawValue value as supplied, before normalization
+     * @return the sector type
+     */
     public static SectorType parse(String rawValue) {
         if (rawValue == null || rawValue.isBlank()) {
             return CUSTOM;

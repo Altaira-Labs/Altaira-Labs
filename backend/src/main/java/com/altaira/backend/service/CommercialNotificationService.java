@@ -24,19 +24,40 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+/** Plan, payment and invitation emails. Retries are auditable and do not repeat state creation. */
 @Service
 public class CommercialNotificationService {
+    /** Logger for this component. */
     private static final Logger logger = LoggerFactory.getLogger(CommercialNotificationService.class);
 
+    /** Persistence access for email log. */
     private final CommercialEmailLogRepository emailLogRepository;
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
+    /** Whether the capability is enabled. */
     private final boolean enabled;
+    /** Key identifying the api. */
     private final String apiKey;
+    /** URL for api. */
     private final URI apiUrl;
+    /** From. */
     private final String from;
+    /** Client used to send the outbound HTTP request. */
     private final HttpClient httpClient;
+    /** Request timeout. */
     private final Duration requestTimeout;
 
+    /**
+     * Creates the commercial notification service with its injected collaborators.
+     *
+     * @param emailLogRepository persistence access for email log
+     * @param objectMapper Jackson mapper used to read or write JSON
+     * @param enabled whether the capability is enabled
+     * @param apiKey key identifying the api
+     * @param apiUrl URL for api
+     * @param from from
+     * @param timeoutMs timeout ms
+     */
     public CommercialNotificationService(
             CommercialEmailLogRepository emailLogRepository,
             ObjectMapper objectMapper,
@@ -57,6 +78,15 @@ public class CommercialNotificationService {
         logger.info("Commercial email config: enabled={}, apiKeyConfigured={}, fromConfigured={}", enabled, !this.apiKey.isBlank(), !this.from.isBlank());
     }
 
+    /**
+     * Sends payment request.
+     *
+     * @param flow flow
+     * @param checkoutUrl URL for checkout
+     * @param amountMinor checkout amount in the currency’s smallest unit
+     * @param currency currency code for the payment
+     * @return the notification result
+     */
     public NotificationResult sendPaymentRequest(
             CommercialFlowEntity flow,
             String checkoutUrl,
@@ -73,6 +103,13 @@ public class CommercialNotificationService {
         return send(flow, "PAYMENT_REQUEST", flow.getLead().getEmail(), "Your Altaira Labs payment link", emailShell("Payment request", body));
     }
 
+    /**
+     * Sends payment confirmed.
+     *
+     * @param flow flow
+     * @param plan proposed or saved delivery plan
+     * @return the notification result
+     */
     public NotificationResult sendPaymentConfirmed(CommercialFlowEntity flow, ProvisioningPlanEntity plan) {
         String body = "<p>Payment has been confirmed. Your client workspace is being prepared.</p>" +
                 "<p><strong>Solution route:</strong> " + escape(plan.getRouteKey()) + "</p>" +
@@ -81,6 +118,13 @@ public class CommercialNotificationService {
         return send(flow, "PAYMENT_CONFIRMED", flow.getLead().getEmail(), "Payment confirmed - Altaira Labs", emailShell("Payment confirmed", body));
     }
 
+    /**
+     * Sends plan summary.
+     *
+     * @param flow flow
+     * @param plan proposed or saved delivery plan
+     * @return the notification result
+     */
     public NotificationResult sendPlanSummary(CommercialFlowEntity flow, ProvisioningPlanEntity plan) {
         String body = "<p>Here is the approved delivery summary linked to your payment.</p>" +
                 "<p><strong>Business:</strong> " + escape(flow.getLead().getBusinessName()) + "</p>" +
@@ -91,14 +135,36 @@ public class CommercialNotificationService {
         return send(flow, "PLAN_SUMMARY", flow.getLead().getEmail(), "Your Altaira Labs delivery plan", emailShell("Approved plan summary", body));
     }
 
+    /**
+     * Determines whether was sent applies.
+     *
+     * @param flow flow
+     * @param type kind of item or operation
+     * @return true when the check succeeds
+     */
     public boolean wasSent(CommercialFlowEntity flow, String type) {
         return emailLogRepository.existsByFlowAndEmailTypeAndStatus(flow, type, "SENT");
     }
 
+    /**
+     * Checks whether this is configured.
+     *
+     * @return true if the value is configured
+     */
     public boolean isConfigured() {
         return configured();
     }
 
+    /**
+     * Delivers the requested commercial notification and records the delivery outcome.
+     *
+     * @param flow flow
+     * @param type kind of item or operation
+     * @param recipient recipient
+     * @param subject subject
+     * @param html html
+     * @return the notification result
+     */
     private NotificationResult send(CommercialFlowEntity flow, String type, String recipient, String subject, String html) {
         if (!configured()) {
             return logSkipped(flow, type, recipient, "Commercial email is not configured.");
@@ -144,6 +210,15 @@ public class CommercialNotificationService {
         }
     }
 
+    /**
+     * Records why this notification was skipped.
+     *
+     * @param flow flow
+     * @param type kind of item or operation
+     * @param recipient recipient
+     * @param reason explanation of the decision
+     * @return the notification result
+     */
     private NotificationResult logSkipped(CommercialFlowEntity flow, String type, String recipient, String reason) {
         CommercialEmailLogEntity log = baseLog(flow, type, recipient);
         log.setStatus("SKIPPED");
@@ -152,6 +227,14 @@ public class CommercialNotificationService {
         return new NotificationResult(false, reason);
     }
 
+    /**
+     * Populates the shared fields of a commercial email audit record.
+     *
+     * @param flow flow
+     * @param type kind of item or operation
+     * @param recipient recipient
+     * @return the commercial email log record
+     */
     private CommercialEmailLogEntity baseLog(CommercialFlowEntity flow, String type, String recipient) {
         CommercialEmailLogEntity log = new CommercialEmailLogEntity();
         log.setFlow(flow);
@@ -161,6 +244,12 @@ public class CommercialNotificationService {
         return log;
     }
 
+    /**
+     * Reads message id.
+     *
+     * @param body request or response content
+     * @return the resulting text
+     */
     private String readMessageId(String body) {
         try {
             JsonNode id = objectMapper.readTree(body).path("id");
@@ -170,11 +259,41 @@ public class CommercialNotificationService {
         }
     }
 
+    /**
+     * Determines whether configured applies.
+     *
+     * @return true when the check succeeds
+     */
     private boolean configured() { return enabled && !apiKey.isBlank() && !from.isBlank(); }
+    /**
+     * Places the message body inside the common email layout.
+     *
+     * @param title short heading shown to a reader
+     * @param body request or response content
+     * @return the resulting text
+     */
     private String emailShell(String title, String body) {
         return "<div style=\"padding:32px;background:#e5e7eb;font-family:Arial,sans-serif\"><div style=\"max-width:640px;margin:auto;background:#fff;border:1px solid #dbe3ef\"><div style=\"padding:28px 32px;background:#050814;color:#fff;border-bottom:4px solid #2563eb\"><div style=\"letter-spacing:.2em;font-size:12px;color:#bfdbfe\">ALTAIRA LABS</div><h1 style=\"margin:18px 0 0\">" + escape(title) + "</h1></div><div style=\"padding:28px 32px;color:#334155;line-height:1.7\">" + body + "</div></div></div>";
     }
+    /**
+     * Escapes special characters before embedding the value in generated markup.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String escape(Object value) { return String.valueOf(value == null ? "" : value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;"); }
+    /**
+     * Trims surrounding whitespace. Absent values use an empty string.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private static String clean(String value) { return value == null ? "" : value.trim(); }
+    /**
+     * Outcome of notification, shared with the component that requested the operation.
+     *
+     * @param sent sent
+     * @param message text associated with the operation
+     */
     public record NotificationResult(boolean sent, String message) {}
 }

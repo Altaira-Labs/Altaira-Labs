@@ -18,11 +18,17 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Exercises GitHub repository provisioner behavior with JUnit. Individual cases include {@code dryRunGateBlocksBeforeAnyNetworkCall} and {@code reusesRepositoryCreatedByConcurrentRequest}.
+ */
 class GitHubRepositoryProvisionerTests {
 
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper = new ObjectMapper();
+    /** Server. */
     private HttpServer server;
 
+    /** Performs the stop server operation. */
     @AfterEach
     void stopServer() {
         if (server != null) {
@@ -30,6 +36,7 @@ class GitHubRepositoryProvisionerTests {
         }
     }
 
+    /** Regression case: dry run gate blocks before any network call. */
     @Test
     void dryRunGateBlocksBeforeAnyNetworkCall() {
         GitHubAppProperties properties = properties("http://127.0.0.1:1", true);
@@ -52,6 +59,11 @@ class GitHubRepositoryProvisionerTests {
         assertTrue(exception.safeMessage().contains("blocked"));
     }
 
+    /**
+     * Regression case: creates missing repository as private without initial content.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void createsMissingRepositoryAsPrivateWithoutInitialContent() throws Exception {
         AtomicInteger createRequests = new AtomicInteger();
@@ -81,6 +93,11 @@ class GitHubRepositoryProvisionerTests {
         assertEquals(1, createRequests.get());
     }
 
+    /**
+     * Regression case: reuses existing private repository without creating duplicate.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void reusesExistingPrivateRepositoryWithoutCreatingDuplicate() throws Exception {
         AtomicInteger createRequests = new AtomicInteger();
@@ -101,6 +118,11 @@ class GitHubRepositoryProvisionerTests {
         assertEquals(0, createRequests.get());
     }
 
+    /**
+     * Regression case: refuses to reuse public repository.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void refusesToReusePublicRepository() throws Exception {
         startServer(exchange -> respond(exchange, 200, repositoryJson(false)));
@@ -113,6 +135,11 @@ class GitHubRepositoryProvisionerTests {
         assertTrue(exception.safeMessage().contains("private repository target"));
     }
 
+    /**
+     * Regression case: reuses repository created by concurrent request.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void reusesRepositoryCreatedByConcurrentRequest() throws Exception {
         AtomicInteger getRequests = new AtomicInteger();
@@ -142,6 +169,11 @@ class GitHubRepositoryProvisionerTests {
         assertEquals(1, createRequests.get());
     }
 
+    /**
+     * Constructs the execution-capable adapter for a test using the local provider stub.
+     *
+     * @return the GitHub repository provisioner
+     */
     private GitHubRepositoryProvisioner liveProvisioner() {
         String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
         GitHubApiClient apiClient = new GitHubApiClient(objectMapper, HttpClient.newHttpClient());
@@ -153,6 +185,13 @@ class GitHubRepositoryProvisionerTests {
         );
     }
 
+    /**
+     * Builds the GitHub app properties fixture used by the GitHub repository provisioner tests.
+     *
+     * @param baseUrl URL for base
+     * @param dryRun whether the operation is being simulated
+     * @return the GitHub app properties
+     */
     private GitHubAppProperties properties(String baseUrl, boolean dryRun) {
         return new GitHubAppProperties(
                 true,
@@ -168,6 +207,12 @@ class GitHubRepositoryProvisionerTests {
         );
     }
 
+    /**
+     * Starts server.
+     *
+     * @param handler handler
+     * @throws IOException if the underlying input or output cannot be completed
+     */
     private void startServer(ExchangeHandler handler) throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -180,6 +225,14 @@ class GitHubRepositoryProvisionerTests {
         server.start();
     }
 
+    /**
+     * Writes the HTTP status and response body returned by the local test server.
+     *
+     * @param exchange exchange
+     * @param status current state in the workflow
+     * @param body request or response content
+     * @throws IOException if the underlying input or output cannot be completed
+     */
     private void respond(HttpExchange exchange, int status, String body) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -188,6 +241,12 @@ class GitHubRepositoryProvisionerTests {
         exchange.close();
     }
 
+    /**
+     * Builds the sample repository metadata returned by the stub.
+     *
+     * @param privateRepository persistence access for private
+     * @return the resulting text
+     */
     private String repositoryJson(boolean privateRepository) {
         return """
                 {
@@ -201,8 +260,15 @@ class GitHubRepositoryProvisionerTests {
                 """.formatted(privateRepository);
     }
 
+    /** Contract implemented by exchange handler components. */
     @FunctionalInterface
     private interface ExchangeHandler {
+        /**
+         * Handles an HTTP exchange captured by the test server.
+         *
+         * @param exchange exchange
+         * @throws Exception if the operation cannot complete
+         */
         void handle(HttpExchange exchange) throws Exception;
     }
 }

@@ -24,27 +24,39 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/** Exercises client Google auth service behavior with JUnit. */
 @ExtendWith(MockitoExtension.class)
 class ClientGoogleAuthServiceTests {
 
+    /** Persistence access for app user. */
     @Mock
     private AppUserRepository appUserRepository;
 
+    /** Persistence access for client user access. */
     @Mock
     private ClientUserAccessRepository clientUserAccessRepository;
 
+    /** Auth operations used by this component. */
     @Mock
     private AuthService authService;
 
+    /** Security event operations used by this component. */
     @Mock
     private SecurityEventService securityEventService;
 
+    /** Client used to send the outbound HTTP request. */
     @Mock
     private HttpClient httpClient;
 
+    /** Google response. */
     @Mock
     private HttpResponse<String> googleResponse;
 
+    /**
+     * Regression case: Google login rejects ambiguous multiple workspace access.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void googleLoginRejectsAmbiguousMultipleWorkspaceAccess() throws Exception {
         AppUserEntity user = new AppUserEntity();

@@ -220,6 +220,14 @@ It avoids production-like secrets and uses:
 jdbc:h2:mem:altaira_test
 ```
 
+## JavaDoc coverage
+
+From the repository root, run `java scripts/CheckJavaDocs.java` using JDK 21. The checker matches JavaDoc to each explicit production and test declaration. A record describes its components in its type-level `@param` tags. A package describes its responsibility in `package-info.java`.
+
+From `backend/`, run `./mvnw javadoc:javadoc javadoc:test-javadoc` to generate the private API and test references under `target/reports/apidocs/` and `target/reports/testapidocs/`. Doclint validates markup, references and tags. JDK 21 can also report an implicit default constructor on a class without a written constructor. That diagnostic refers to a member synthesized by the compiler.
+
+The scenario audit produces `target/reports/provisioning-engine-scenario-audit.md` during the test run. It contains the outcomes of synthetic planning scenarios and can be regenerated from a fresh clone.
+
 ## Current Backend Test Coverage
 
 The current test class validates:

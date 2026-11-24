@@ -9,8 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Exercises GitHub provisioning service behavior with JUnit. */
 class GitHubProvisioningServiceTests {
 
+    /** Regression case: dry run never executes GitHub write steps. */
     @Test
     void dryRunNeverExecutesGitHubWriteSteps() {
         GitHubAppProperties properties = new GitHubAppProperties(

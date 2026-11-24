@@ -40,24 +40,49 @@ import java.util.UUID;
 @Service
 public class MediaUploadUrlService {
 
+    /** Default content type used by media upload URL service. */
     private static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
+    /** S3 storage prefix used by media upload URL service. */
     private static final String S3_STORAGE_PREFIX = "s3://";
+    /** Allowed folders used by media upload URL service. */
     private static final Set<String> ALLOWED_FOLDERS = Set.of("branding", "legal", "multimedia");
+    /** Blocked extensions used by media upload URL service. */
     private static final Set<String> BLOCKED_EXTENSIONS = Set.of(
             "app", "bat", "cmd", "com", "dll", "dmg", "exe", "html", "htm", "jar",
             "js", "mjs", "msi", "php", "ps1", "scr", "sh", "vbs"
     );
 
+    /** Whether the capability is enabled. */
     private final boolean enabled;
+    /** Region. */
     private final String region;
+    /** Private bucket. */
     private final String privateBucket;
+    /** Public bucket. */
     private final String publicBucket;
+    /** URL for public base. */
     private final String publicBaseUrl;
+    /** Presign ttl in seconds. */
     private final long presignTtlSeconds;
+    /** Max file size bytes. */
     private final long maxFileSizeBytes;
+    /** S3 client. */
     private final S3Client s3Client;
+    /** Presigner. */
     private final S3Presigner presigner;
 
+    /**
+     * Constructs {@code MediaUploadUrlService} using the supplied enabled, region, private bucket and remaining fields.
+     *
+     * @param enabled whether the capability is enabled
+     * @param region region
+     * @param privateBucket private bucket
+     * @param publicBucket public bucket
+     * @param publicBaseUrl URL for public base
+     * @param presignTtlSeconds presign ttl in seconds
+     * @param maxFileSizeBytes max file size bytes
+     * @throws IllegalStateException when validation reports “S3 uploads are enabled but region or private bucket is missing”
+     */
     @Autowired
     public MediaUploadUrlService(
             @Value("${altaira.media.s3.enabled:false}") boolean enabled,
@@ -90,6 +115,16 @@ public class MediaUploadUrlService {
         }
     }
 
+    /**
+     * Constructs {@code MediaUploadUrlService} using the supplied enabled, region, private bucket and remaining fields.
+     *
+     * @param enabled whether the capability is enabled
+     * @param region region
+     * @param privateBucket private bucket
+     * @param publicBucket public bucket
+     * @param publicBaseUrl URL for public base
+     * @param presignTtlSeconds presign ttl in seconds
+     */
     MediaUploadUrlService(
             boolean enabled,
             String region,
@@ -101,6 +136,20 @@ public class MediaUploadUrlService {
         this(enabled, region, privateBucket, publicBucket, publicBaseUrl, presignTtlSeconds, 15_728_640L);
     }
 
+    /**
+     * Constructs {@code MediaUploadUrlService} using the supplied enabled, region, private bucket and remaining fields.
+     *
+     * @param enabled whether the capability is enabled
+     * @param region region
+     * @param privateBucket private bucket
+     * @param publicBucket public bucket
+     * @param publicBaseUrl URL for public base
+     * @param presignTtlSeconds presign ttl in seconds
+     * @param maxFileSizeBytes max file size bytes
+     * @param s3Client S3 client
+     * @param presigner presigner
+     * @throws IllegalStateException when validation reports “S3 uploads are enabled but configuration or clients are missing”
+     */
     MediaUploadUrlService(
             boolean enabled,
             String region,
@@ -128,10 +177,18 @@ public class MediaUploadUrlService {
         this.presigner = enabled ? presigner : null;
     }
 
+    /** {@return whether the capability is enabled} */
     public boolean isEnabled() {
         return enabled;
     }
 
+    /**
+     * Creates client upload URL.
+     *
+     * @param context context carrying client access
+     * @param request input carrying create upload URL
+     * @return the upload URL response
+     */
     public UploadUrlResponse createClientUploadUrl(ClientAccessContext context, CreateUploadUrlRequest request) {
         String folder = normalizeFolder(request.getFolder());
         return createUploadUrl(
@@ -146,6 +203,17 @@ public class MediaUploadUrlService {
         );
     }
 
+    /**
+     * Creates context upload URL.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param folder folder
+     * @param serviceKey stable key for the service
+     * @param contextType context type
+     * @param contextId identifier of the context
+     * @param request input carrying prepare private upload
+     * @return the upload URL response
+     */
     public UploadUrlResponse createContextUploadUrl(
             UUID clientId,
             String folder,
@@ -167,6 +235,22 @@ public class MediaUploadUrlService {
         );
     }
 
+    /**
+     * Verifies completed upload.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param folder folder
+     * @param serviceKey stable key for the service
+     * @param contextType context type
+     * @param contextId identifier of the context
+     * @param bucket bucket
+     * @param objectKey storage key identifying the private file
+     * @param filename filename
+     * @param expectedContentType expected content type
+     * @param expectedSizeBytes expected size bytes
+     * @return the verified S3 object
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (forbidden, bad request, service unavailable)
+     */
     public VerifiedS3Object verifyCompletedUpload(
             UUID clientId,
             String folder,
@@ -242,10 +326,23 @@ public class MediaUploadUrlService {
         }
     }
 
+    /**
+     * Checks whether this is S3 storage key.
+     *
+     * @param storageKey key identifying the storage
+     * @return true if the value is S3 storage key
+     */
     public boolean isS3StorageKey(String storageKey) {
         return storageKey != null && storageKey.startsWith(S3_STORAGE_PREFIX);
     }
 
+    /**
+     * Opens stored object.
+     *
+     * @param storageKey key identifying the storage
+     * @return the value produced by this operation
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (not found, service unavailable)
+     */
     public ResponseInputStream<GetObjectResponse> openStoredObject(String storageKey) {
         requireEnabled();
         StoredObjectLocation location = parseStorageKey(storageKey);
@@ -266,6 +363,11 @@ public class MediaUploadUrlService {
         }
     }
 
+    /**
+     * Deletes stored object quietly.
+     *
+     * @param storageKey key identifying the storage
+     */
     public void deleteStoredObjectQuietly(String storageKey) {
         if (!enabled || !isS3StorageKey(storageKey)) {
             return;
@@ -283,6 +385,7 @@ public class MediaUploadUrlService {
         }
     }
 
+    /** Closes clients. */
     @PreDestroy
     void closeClients() {
         if (presigner != null) {
@@ -293,6 +396,20 @@ public class MediaUploadUrlService {
         }
     }
 
+    /**
+     * Creates upload URL.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param folder folder
+     * @param serviceKey stable key for the service
+     * @param contextType context type
+     * @param contextId identifier of the context
+     * @param filename filename
+     * @param contentType media type declared for the file
+     * @param expectedSizeBytes expected size bytes
+     * @return the upload URL response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (service unavailable)
+     */
     private UploadUrlResponse createUploadUrl(
             UUID clientId,
             String folder,
@@ -360,6 +477,16 @@ public class MediaUploadUrlService {
         }
     }
 
+    /**
+     * Uploads metadata.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param serviceKey stable key for the service
+     * @param contextType context type
+     * @param contextId identifier of the context
+     * @param expectedSizeBytes expected size bytes
+     * @return the resulting key–value pairs
+     */
     private Map<String, String> uploadMetadata(
             UUID clientId,
             String serviceKey,
@@ -378,6 +505,17 @@ public class MediaUploadUrlService {
         return metadata;
     }
 
+    /**
+     * Verifies metadata.
+     *
+     * @param metadata additional context recorded with the event
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param serviceKey stable key for the service
+     * @param contextType context type
+     * @param contextId identifier of the context
+     * @param expectedSizeBytes expected size bytes
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (bad request)
+     */
     private void verifyMetadata(
             Map<String, String> metadata,
             UUID clientId,
@@ -398,6 +536,19 @@ public class MediaUploadUrlService {
         }
     }
 
+    /**
+     * Ensures expected object key.
+     *
+     * @param objectKey storage key identifying the private file
+     * @param folder folder
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param serviceKey stable key for the service
+     * @param contextType context type
+     * @param contextId identifier of the context
+     * @param filename filename
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (forbidden)
+     * @throws IllegalArgumentException when validation reports “objectKey is required”
+     */
     private void ensureExpectedObjectKey(
             String objectKey,
             String folder,
@@ -421,12 +572,25 @@ public class MediaUploadUrlService {
         }
     }
 
+    /**
+     * Ensures allowed bucket.
+     *
+     * @param bucket bucket
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (forbidden)
+     */
     private void ensureAllowedBucket(String bucket) {
         if (bucket == null || (!bucket.equals(privateBucket) && !bucket.equals(publicBucket))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "S3 bucket is not allowed for this application");
         }
     }
 
+    /**
+     * Ensures safe file. Uses locale-independent case normalization.
+     *
+     * @param filename filename
+     * @param contentType media type declared for the file
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (unsupported media type)
+     */
     private void ensureSafeFile(String filename, String contentType) {
         int separator = filename.lastIndexOf('.');
         String extension = separator < 0 ? "" : filename.substring(separator + 1).toLowerCase(Locale.ROOT);
@@ -440,6 +604,12 @@ public class MediaUploadUrlService {
         }
     }
 
+    /**
+     * Validates file size.
+     *
+     * @param sizeBytes content length in bytes
+     * @throws IllegalArgumentException when validation reports “Uploaded file cannot be empty” or “Uploaded file is larger than the configured limit”
+     */
     private void validateFileSize(long sizeBytes) {
         if (sizeBytes <= 0) {
             throw new IllegalArgumentException("Uploaded file cannot be empty");
@@ -449,12 +619,24 @@ public class MediaUploadUrlService {
         }
     }
 
+    /**
+     * Requires enabled.
+     *
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (not implemented)
+     */
     private void requireEnabled() {
         if (!enabled) {
             throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, "S3 presigned uploads are not configured");
         }
     }
 
+    /**
+     * Normalizes folder. Uses locale-independent case normalization.
+     *
+     * @param rawFolder raw folder
+     * @return the resulting text
+     * @throws IllegalArgumentException when validation reports “folder is required”
+     */
     private String normalizeFolder(String rawFolder) {
         String normalized = trimToNull(rawFolder);
         if (normalized == null) {
@@ -468,6 +650,12 @@ public class MediaUploadUrlService {
         return normalized;
     }
 
+    /**
+     * Selects the configured object-storage bucket for the requested folder.
+     *
+     * @param folder folder
+     * @return the resulting text
+     */
     private String bucketForFolder(String folder) {
         if (("branding".equals(folder) || "multimedia".equals(folder)) && publicBucket != null) {
             return publicBucket;
@@ -475,6 +663,13 @@ public class MediaUploadUrlService {
         return privateBucket;
     }
 
+    /**
+     * Constructs a public asset link only for branding or multimedia files and only when a public base URL is configured.
+     *
+     * @param folder folder
+     * @param objectKey storage key identifying the private file
+     * @return the resulting text
+     */
     private String publicUrlFor(String folder, String objectKey) {
         if ((!"branding".equals(folder) && !"multimedia".equals(folder)) || publicBaseUrl == null) {
             return null;
@@ -482,6 +677,17 @@ public class MediaUploadUrlService {
         return publicBaseUrl.replaceAll("/+$", "") + "/" + objectKey;
     }
 
+    /**
+     * Builds object key.
+     *
+     * @param folder folder
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param serviceKey stable key for the service
+     * @param contextType context type
+     * @param contextId identifier of the context
+     * @param filename filename
+     * @return the resulting text
+     */
     private String buildObjectKey(
             String folder,
             UUID clientId,
@@ -494,6 +700,13 @@ public class MediaUploadUrlService {
                 UUID.randomUUID() + "-" + filename;
     }
 
+    /**
+     * Parses storage key.
+     *
+     * @param storageKey key identifying the storage
+     * @return the stored object location
+     * @throws IllegalArgumentException when validation reports “Invalid S3 storage key”
+     */
     private StoredObjectLocation parseStorageKey(String storageKey) {
         if (!isS3StorageKey(storageKey)) {
             throw new IllegalArgumentException("Invalid S3 storage key");
@@ -507,11 +720,23 @@ public class MediaUploadUrlService {
         return new StoredObjectLocation(location.substring(0, separator), location.substring(separator + 1));
     }
 
+    /**
+     * Builds the filename used to store the uploaded content.
+     *
+     * @param objectKey storage key identifying the private file
+     * @return the resulting text
+     */
     private String storedFilename(String objectKey) {
         int separator = objectKey.lastIndexOf('/');
         return separator < 0 ? objectKey : objectKey.substring(separator + 1);
     }
 
+    /**
+     * Sanitizes path segment. Uses locale-independent case normalization.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String sanitizePathSegment(String value) {
         String source = trimToNull(value);
         if (source == null) {
@@ -522,6 +747,13 @@ public class MediaUploadUrlService {
         return sanitized.isBlank() ? "general" : sanitized;
     }
 
+    /**
+     * Sanitizes filename.
+     *
+     * @param filename filename
+     * @return the resulting text
+     * @throws IllegalArgumentException when validation reports “filename is required”
+     */
     private String sanitizeFilename(String filename) {
         String sanitized = trimToNull(filename);
         if (sanitized == null) {
@@ -538,11 +770,23 @@ public class MediaUploadUrlService {
         return sanitized.isBlank() ? "upload.bin" : sanitized;
     }
 
+    /**
+     * Normalizes content type.
+     *
+     * @param rawContentType raw content type
+     * @return the resulting text
+     */
     private String normalizeContentType(String rawContentType) {
         String normalized = trimToNull(rawContentType);
         return normalized == null ? DEFAULT_CONTENT_TYPE : normalized;
     }
 
+    /**
+     * Trims surrounding whitespace. Absent values return null.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String trimToNull(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -550,6 +794,18 @@ public class MediaUploadUrlService {
         return value.trim();
     }
 
+    /**
+     * Groups the verified S3 object data used by media upload URL service.
+     *
+     * @param storageKey key identifying the storage
+     * @param bucket bucket
+     * @param objectKey storage key identifying the private file
+     * @param originalFilename filename supplied by the uploader
+     * @param storedFilename stored filename
+     * @param contentType media type declared for the file
+     * @param sizeBytes content length in bytes
+     * @param checksumSha256 SHA-256 digest used to identify file contents
+     */
     public record VerifiedS3Object(
             String storageKey,
             String bucket,
@@ -561,5 +817,11 @@ public class MediaUploadUrlService {
             String checksumSha256
     ) {}
 
+    /**
+     * Groups the stored object location data used by media upload URL service.
+     *
+     * @param bucket bucket
+     * @param objectKey storage key identifying the private file
+     */
     private record StoredObjectLocation(String bucket, String objectKey) {}
 }

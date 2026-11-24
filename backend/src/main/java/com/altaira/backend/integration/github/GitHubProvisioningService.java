@@ -10,15 +10,28 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+/** Coordinates GitHub provisioning operations in the backend. */
 @Service
 public class GitHubProvisioningService {
 
+    /** Properties. */
     private final GitHubAppProperties properties;
 
+    /**
+     * Constructs {@code GitHubProvisioningService} using the supplied properties.
+     *
+     * @param properties properties
+     */
     public GitHubProvisioningService(GitHubAppProperties properties) {
         this.properties = properties;
     }
 
+    /**
+     * Builds the preview result describing what would be provisioned.
+     *
+     * @param request input carrying GitHub provisioning dry run
+     * @return the GitHub provisioning plan response
+     */
     public GitHubProvisioningPlanResponse dryRun(GitHubProvisioningDryRunRequest request) {
         String projectName = trimToDefault(request == null ? null : request.getProjectName(), "Altaira client workspace");
         String clientName = trimToDefault(request == null ? null : request.getClientName(), projectName);
@@ -92,26 +105,63 @@ public class GitHubProvisioningService {
         return plan;
     }
 
+    /**
+     * Creates repository.
+     *
+     * @param plan proposed or saved delivery plan
+     * @return the GitHub provisioning step result
+     */
     public GitHubProvisioningStepResult createRepository(GitHubProvisioningPlanResponse plan) {
         return guardedStep("createRepository", "Would create repository " + plan.repoToCreate());
     }
 
+    /**
+     * Creates initial files.
+     *
+     * @param plan proposed or saved delivery plan
+     * @return the GitHub provisioning step result
+     */
     public GitHubProvisioningStepResult createInitialFiles(GitHubProvisioningPlanResponse plan) {
         return guardedStep("createInitialFiles", "Would create " + plan.initialFilesProposed().size() + " starter files");
     }
 
+    /**
+     * Creates labels.
+     *
+     * @param plan proposed or saved delivery plan
+     * @return the GitHub provisioning step result
+     */
     public GitHubProvisioningStepResult createLabels(GitHubProvisioningPlanResponse plan) {
         return guardedStep("createLabels", "Would create " + plan.labelsProposed().size() + " labels");
     }
 
+    /**
+     * Creates issues.
+     *
+     * @param plan proposed or saved delivery plan
+     * @return the GitHub provisioning step result
+     */
     public GitHubProvisioningStepResult createIssues(GitHubProvisioningPlanResponse plan) {
         return guardedStep("createIssues", "Would create " + plan.issuesProposed().size() + " issues");
     }
 
+    /**
+     * Creates pull request.
+     *
+     * @param plan proposed or saved delivery plan
+     * @return the GitHub provisioning step result
+     */
     public GitHubProvisioningStepResult createPullRequest(GitHubProvisioningPlanResponse plan) {
         return guardedStep("createPullRequest", "Would open a setup pull request if branch-based initialization is selected");
     }
 
+    /**
+     * Builds the preview of a provisioning step and records the condition for allowing it to run.
+     *
+     * @param step step
+     * @param action action being recorded
+     * @return the GitHub provisioning step result
+     */
     private GitHubProvisioningStepResult guardedStep(String step, String action) {
         if (!properties.enabled()) {
             return new GitHubProvisioningStepResult(step, false, action, "GitHub App integration is disabled.");
@@ -125,6 +175,13 @@ public class GitHubProvisioningService {
         return new GitHubProvisioningStepResult(step, false, action, "Live GitHub write operation is intentionally not implemented in this safe backend block.");
     }
 
+    /**
+     * Trims surrounding whitespace.
+     *
+     * @param value stored or supplied representation
+     * @param defaultValue default value
+     * @return the resulting text
+     */
     private String trimToDefault(String value, String defaultValue) {
         return value == null || value.isBlank() ? defaultValue : value.trim();
     }

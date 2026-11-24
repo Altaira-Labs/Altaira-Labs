@@ -14,14 +14,30 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Connects a customer to a service from the consultancy's catalogue.
+ * <p>A catalogue entry describes an offering such as a booking system. The assignment
+ * records whether that particular customer has the service and carries its delivery
+ * status and notes. Assigning an existing customer–service pair reuses the same record.
+ */
 @Service
 @Transactional
 public class ClientServiceAssignmentService {
 
+    /** Persistence access for client service. */
     private final ClientServiceRepository clientServiceRepository;
+    /** Client management operations used by this component. */
     private final ClientManagementService clientManagementService;
+    /** Service catalog operations used by this component. */
     private final ServiceCatalogService serviceCatalogService;
 
+    /**
+     * Creates the client service assignment service with its injected collaborators.
+     *
+     * @param clientServiceRepository persistence access for client service
+     * @param clientManagementService client management operations used by this component
+     * @param serviceCatalogService service catalog operations used by this component
+     */
     public ClientServiceAssignmentService(
             ClientServiceRepository clientServiceRepository,
             ClientManagementService clientManagementService,
@@ -32,6 +48,13 @@ public class ClientServiceAssignmentService {
         this.serviceCatalogService = serviceCatalogService;
     }
 
+    /**
+     * Looks up the customer and catalogue service and reuses their assignment when that pair already exists.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param request input carrying assign client service
+     * @return the client service response
+     */
     public ClientServiceResponse assignService(UUID clientId, AssignClientServiceRequest request) {
         ClientEntity client = clientManagementService.findClientEntity(clientId);
         ServiceEntity service = serviceCatalogService.findServiceEntity(request.getServiceId());
@@ -60,6 +83,12 @@ public class ClientServiceAssignmentService {
         return map(clientServiceRepository.save(entity));
     }
 
+    /**
+     * Lists the services attached to a particular customer, with the catalogue descriptions included.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @return the client service response items
+     */
     public List<ClientServiceResponse> getClientServices(UUID clientId) {
         ClientEntity client = clientManagementService.findClientEntity(clientId);
 
@@ -69,6 +98,14 @@ public class ClientServiceAssignmentService {
                 .toList();
     }
 
+    /**
+     * Finds the service assignment by its identifier, checks the requested status and returns the saved assignment.
+     *
+     * @param id unique identifier of the record
+     * @param status current state in the workflow
+     * @return the client service response
+     * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
+     */
     public ClientServiceResponse updateStatus(UUID id, String status) {
         ClientServiceEntity entity = clientServiceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Client service", id));
@@ -77,6 +114,12 @@ public class ClientServiceAssignmentService {
         return map(clientServiceRepository.save(entity));
     }
 
+    /**
+     * Normalizes status or default.
+     *
+     * @param status current state in the workflow
+     * @return the resulting text
+     */
     private String normalizeStatusOrDefault(String status) {
         if (status == null || status.isBlank()) {
             return ClientServiceStatus.PLANNED.value();
@@ -85,6 +128,12 @@ public class ClientServiceAssignmentService {
         return ClientServiceStatus.parse(status).value();
     }
 
+    /**
+     * Builds {@code ClientServiceResponse} from {@code ClientServiceEntity}, selecting the fields used by the caller.
+     *
+     * @param entity record carrying client service
+     * @return the client service response
+     */
     private ClientServiceResponse map(ClientServiceEntity entity) {
         return new ClientServiceResponse(
                 entity.getId(),
@@ -97,6 +146,12 @@ public class ClientServiceAssignmentService {
         );
     }
 
+    /**
+     * Trims surrounding whitespace. Absent values use an empty string.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String trimOptional(String value) {
         if (value == null || value.isBlank()) {
             return "";

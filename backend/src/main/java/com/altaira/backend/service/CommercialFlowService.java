@@ -27,29 +27,71 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+/**
+ * Connects an approved delivery plan, a checkout session and activation of the client workspace.
+ * <p>The checkout link starts a payment attempt. Creating it does not activate the workspace.
+ * In the Stripe test flow, a verified event confirms the payment. In the local mock flow,
+ * a separate guarded operation simulates confirmation. Both paths lead into the same
+ * activation logic so the offline acceptance test can exercise the business workflow.
+ * <p>Delivery notifications have their own retry path. Staff can retry a failed email
+ * without asking the customer to pay again.
+ */
 @Service
 @Transactional
 public class CommercialFlowService {
+    /** Success events used by commercial flow service. */
     private static final List<String> SUCCESS_EVENTS = List.of(
             "checkout.session.completed",
             "checkout.session.async_payment_succeeded"
     );
 
+    /** Persistence access for plan. */
     private final ProvisioningPlanRepository planRepository;
+    /** Persistence access for flow. */
     private final CommercialFlowRepository flowRepository;
+    /** Persistence access for session. */
     private final CommercialPaymentSessionRepository sessionRepository;
+    /** Persistence access for event. */
     private final CommercialPaymentEventRepository eventRepository;
+    /** Persistence access for email log. */
     private final CommercialEmailLogRepository emailLogRepository;
+    /** Persistence access for workspace. */
     private final ClientWorkspaceRepository workspaceRepository;
+    /** Conversion operations used by this component. */
     private final LeadConversionService conversionService;
+    /** Client management operations used by this component. */
     private final ClientManagementService clientManagementService;
+    /** Invitation operations used by this component. */
     private final ClientInvitationService invitationService;
+    /** Execution operations used by this component. */
     private final ProvisioningExecutionService executionService;
+    /** Notification operations used by this component. */
     private final CommercialNotificationService notificationService;
+    /** Stripe gateway. */
     private final StripeCheckoutGateway stripeGateway;
+    /** Stripe properties. */
     private final CommercialStripeProperties stripeProperties;
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
 
+    /**
+     * Creates the commercial flow service with its injected collaborators.
+     *
+     * @param planRepository persistence access for plan
+     * @param flowRepository persistence access for flow
+     * @param sessionRepository persistence access for session
+     * @param eventRepository persistence access for event
+     * @param emailLogRepository persistence access for email log
+     * @param workspaceRepository persistence access for workspace
+     * @param conversionService conversion operations used by this component
+     * @param clientManagementService client management operations used by this component
+     * @param invitationService invitation operations used by this component
+     * @param executionService execution operations used by this component
+     * @param notificationService notification operations used by this component
+     * @param stripeGateway Stripe gateway
+     * @param stripeProperties Stripe properties
+     * @param objectMapper Jackson mapper used to read or write JSON
+     */
     public CommercialFlowService(
             ProvisioningPlanRepository planRepository,
             CommercialFlowRepository flowRepository,
@@ -82,6 +124,12 @@ public class CommercialFlowService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Retrieves flow.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @return flow
+     */
     @Transactional(readOnly = true)
     public CommercialFlowResponse getFlow(UUID planId) {
         ProvisioningPlanEntity plan = findPlan(planId);
@@ -90,6 +138,13 @@ public class CommercialFlowService {
                 .orElseGet(() -> emptyResponse(plan));
     }
 
+    /**
+     * Loads the approved plan and requests a payment session from the configured checkout adapter. The commercial flow records the session and returns its checkout information.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @param request input carrying create checkout
+     * @return the commercial flow response
+     */
     public CommercialFlowResponse createCheckout(UUID planId, CreateCheckoutRequest request) {
         ProvisioningPlanEntity plan = findPlan(planId);
         requireApproved(plan);
@@ -150,6 +205,14 @@ public class CommercialFlowService {
                 : "Stripe test checkout created.");
     }
 
+    /**
+     * Confirms a simulated payment only when mock confirmation is enabled and the saved checkout session is itself a mock.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @return the commercial flow response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (forbidden, conflict)
+     * @throws IllegalArgumentException when validation reports “Create a mock checkout first”
+     */
     public CommercialFlowResponse confirmMock(UUID planId) {
         if (!stripeProperties.mockConfirmationEnabled()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Mock payment confirmation is disabled");
@@ -165,6 +228,14 @@ public class CommercialFlowService {
         return map(plan, flow, "Mock payment confirmed and post-payment activation completed.");
     }
 
+    /**
+     * Re-enters activation for a plan whose payment has already been confirmed.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @return the commercial flow response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (conflict)
+     * @throws IllegalArgumentException when validation reports “Commercial flow not found”
+     */
     public CommercialFlowResponse retryActivation(UUID planId) {
         ProvisioningPlanEntity plan = findPlan(planId);
         CommercialFlowEntity flow = flowRepository.findByPlan(plan)
@@ -176,6 +247,13 @@ public class CommercialFlowService {
         return map(plan, flow, "Post-payment activation retried.");
     }
 
+    /**
+     * Retries the commercial notifications associated with a saved flow.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @return the commercial flow response
+     * @throws IllegalArgumentException when validation reports “Commercial flow not found”
+     */
     public CommercialFlowResponse retryNotifications(UUID planId) {
         ProvisioningPlanEntity plan = findPlan(planId);
         CommercialFlowEntity flow = flowRepository.findByPlan(plan)
@@ -207,6 +285,13 @@ public class CommercialFlowService {
                 : "Commercial email retry completed without duplicating successful deliveries.");
     }
 
+    /**
+     * Verifies the webhook signature, reads the checkout event and uses its session identifier to reconcile the recorded payment.
+     *
+     * @param payload data passed across this boundary
+     * @param signature signature accompanying the event
+     * @throws IllegalArgumentException when validation reports “Stripe event does not contain a Checkout Session id” or “Stripe Checkout Session is not registered”
+     */
     public void processStripeWebhook(String payload, String signature) {
         Event stripeEvent = stripeGateway.verifyWebhook(payload, signature);
         if (eventRepository.findByProviderEventId(stripeEvent.getId()).isPresent()) return;
@@ -260,6 +345,13 @@ public class CommercialFlowService {
         eventRepository.save(event);
     }
 
+    /**
+     * Records the payment confirmation and initiates activation for the associated commercial flow.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param flow flow
+     * @param session session
+     */
     private void confirmPayment(ProvisioningPlanEntity plan, CommercialFlowEntity flow, CommercialPaymentSessionEntity session) {
         if (CommercialPaymentStatus.PAYMENT_CONFIRMED.name().equals(flow.getPaymentStatus())) {
             activate(plan, flow);
@@ -277,6 +369,13 @@ public class CommercialFlowService {
         activate(plan, flow);
     }
 
+    /**
+     * Converts the confirmed plan into a client workspace and records its activation.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param flow flow
+     * @throws IllegalStateException when validation reports “Client workspace was not created”
+     */
     private void activate(ProvisioningPlanEntity plan, CommercialFlowEntity flow) {
         List<String> serviceKeys = serviceKeys(plan);
         LeadConversionResponse conversion = conversionService.convertAfterConfirmedPayment(
@@ -317,6 +416,12 @@ public class CommercialFlowService {
         flowRepository.save(flow);
     }
 
+    /**
+     * Ensures flow. Persists changes through {@code flowRepository}.
+     *
+     * @param plan proposed or saved delivery plan
+     * @return the commercial flow record
+     */
     private CommercialFlowEntity ensureFlow(ProvisioningPlanEntity plan) {
         return flowRepository.findByPlan(plan).orElseGet(() -> {
             CommercialFlowEntity flow = new CommercialFlowEntity();
@@ -326,16 +431,37 @@ public class CommercialFlowService {
         });
     }
 
+    /**
+     * Returns the most recent payment session recorded for this commercial flow.
+     *
+     * @param flow flow
+     * @return the commercial payment session record
+     * @throws IllegalArgumentException when validation reports “Payment session not found”
+     */
     private CommercialPaymentSessionEntity latestSession(CommercialFlowEntity flow) {
         return sessionRepository.findAllByFlowOrderByCreatedAtDesc(flow).stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Payment session not found"));
     }
 
+    /**
+     * Checks whether this is terminal.
+     *
+     * @param session session
+     * @return true if the value is terminal
+     */
     private boolean isTerminal(CommercialPaymentSessionEntity session) {
         return CommercialPaymentStatus.PAYMENT_FAILED.name().equals(session.getStatus())
                 || CommercialPaymentStatus.PAYMENT_CANCELLED.name().equals(session.getStatus());
     }
 
+    /**
+     * Builds {@code CommercialFlowResponse} from {@code ProvisioningPlanEntity}, selecting the fields used by the caller.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param flow flow
+     * @param message text associated with the operation
+     * @return the commercial flow response
+     */
     private CommercialFlowResponse map(ProvisioningPlanEntity plan, CommercialFlowEntity flow, String message) {
         CommercialPaymentSessionEntity session = sessionRepository.findAllByFlowOrderByCreatedAtDesc(flow).stream().findFirst().orElse(null);
         CommercialFlowResponse.PaymentSession payment = session == null ? null : new CommercialFlowResponse.PaymentSession(
@@ -362,6 +488,12 @@ public class CommercialFlowService {
         );
     }
 
+    /**
+     * Returns the commercial view for a plan without a recorded flow.
+     *
+     * @param plan proposed or saved delivery plan
+     * @return the commercial flow response
+     */
     private CommercialFlowResponse emptyResponse(ProvisioningPlanEntity plan) {
         return new CommercialFlowResponse(
                 null, plan.getId(), plan.getLead().getId(), null, null,
@@ -373,6 +505,13 @@ public class CommercialFlowService {
         );
     }
 
+    /**
+     * Reads the catalogue keys represented by the approved plan.
+     *
+     * @param plan proposed or saved delivery plan
+     * @return the string items
+     * @throws IllegalStateException when validation reports “Approved plan has no readable service selection”
+     */
     private List<String> serviceKeys(ProvisioningPlanEntity plan) {
         List<String> fromTracks = readTracks(plan.getTracksJson()).stream()
                 .map(ProvisioningPlanResponse.Track::track)
@@ -389,23 +528,55 @@ public class CommercialFlowService {
         }
     }
 
+    /**
+     * Reads tracks.
+     *
+     * @param json JSON
+     * @return the track items
+     * @throws IllegalStateException when validation reports “Provisioning tracks could not be read”
+     */
     private List<ProvisioningPlanResponse.Track> readTracks(String json) {
         if (json == null || json.isBlank()) return List.of();
         try { return objectMapper.readValue(json, new TypeReference<>() {}); }
         catch (JsonProcessingException exception) { throw new IllegalStateException("Provisioning tracks could not be read", exception); }
     }
 
+    /**
+     * Reads JSON.
+     *
+     * @param payload data passed across this boundary
+     * @return the JSON node
+     * @throws IllegalArgumentException when validation reports “Stripe webhook payload is invalid”
+     */
     private JsonNode readJson(String payload) {
         try { return objectMapper.readTree(payload); }
         catch (JsonProcessingException exception) { throw new IllegalArgumentException("Stripe webhook payload is invalid", exception); }
     }
 
+    /**
+     * Finds plan. Looks up the referenced record by identifier.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @return the provisioning plan record
+     */
     private ProvisioningPlanEntity findPlan(UUID planId) {
         return planRepository.findById(planId).orElseThrow(() -> new IllegalArgumentException("Provisioning plan not found: " + planId));
     }
+    /**
+     * Requires approved.
+     *
+     * @param plan proposed or saved delivery plan
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (conflict)
+     */
     private void requireApproved(ProvisioningPlanEntity plan) {
         if (!isApproved(plan)) throw new ResponseStatusException(HttpStatus.CONFLICT, "Provisioning plan must be approved before payment");
     }
+    /**
+     * Checks whether this is approved.
+     *
+     * @param plan proposed or saved delivery plan
+     * @return true if the value is approved
+     */
     private boolean isApproved(ProvisioningPlanEntity plan) {
         return List.of(ProvisioningPlanStatus.APPROVED.value(), ProvisioningPlanStatus.PROVISIONED.value(), ProvisioningPlanStatus.PARTIALLY_COMPLETED.value()).contains(plan.getStatus());
     }

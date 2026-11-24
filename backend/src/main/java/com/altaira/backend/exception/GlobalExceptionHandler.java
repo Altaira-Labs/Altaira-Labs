@@ -13,11 +13,19 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
+/** Maps exceptions raised by the application into HTTP responses that clients can handle. */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    /** Logger for this component. */
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /**
+     * Handles validation errors.
+     *
+     * @param ex ex
+     * @return the HTTP response for this operation
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationErrors(MethodArgumentNotValidException ex) {
         Map<String, String> fieldErrors = new HashMap<>();
@@ -40,10 +48,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(response);
     }
 
+    /**
+     * Checks whether this is required message.
+     *
+     * @param message text associated with the operation
+     * @return true if the value is required message
+     */
     private boolean isRequiredMessage(String message) {
         return message != null && message.endsWith("is required");
     }
 
+    /**
+     * Handles runtime error.
+     *
+     * @param ex ex
+     * @return the HTTP response for this operation
+     */
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntimeError(RuntimeException ex) {
         logger.error("Unhandled runtime exception", ex);
@@ -56,6 +76,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 
+    /**
+     * Handles lead not found.
+     *
+     * @param ex ex
+     * @return the HTTP response for this operation
+     */
     @ExceptionHandler(LeadNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleLeadNotFound(LeadNotFoundException ex) {
         Map<String, Object> response = new HashMap<>();
@@ -66,6 +92,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
 
+    /**
+     * Handles resource not found.
+     *
+     * @param ex ex
+     * @return the HTTP response for this operation
+     */
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleResourceNotFound(ResourceNotFoundException ex) {
         Map<String, Object> response = new HashMap<>();
@@ -76,6 +108,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
 
+    /**
+     * Handles bad request.
+     *
+     * @param ex ex
+     * @return the HTTP response for this operation
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleBadRequest(IllegalArgumentException ex) {
         Map<String, Object> response = new HashMap<>();
@@ -86,6 +124,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(response);
     }
 
+    /**
+     * Handles response status.
+     *
+     * @param ex ex
+     * @return the HTTP response for this operation
+     */
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, Object>> handleResponseStatus(ResponseStatusException ex) {
         Map<String, Object> response = new HashMap<>();
@@ -96,6 +140,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatusCode()).body(response);
     }
 
+    /**
+     * Handles generic error.
+     *
+     * @param ex ex
+     * @return the HTTP response for this operation
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGenericError(Exception ex) {
         logger.error("Unhandled exception", ex);

@@ -49,26 +49,53 @@ import java.util.UUID;
 @Transactional
 public class GitHubProvisioningExecutionService {
 
+    /** Confirmation used by GitHub provisioning execution service. */
     public static final String CONFIRMATION = "CONFIRM_PRIVATE_REPOSITORY";
+    /** Provider used by GitHub provisioning execution service. */
     private static final String PROVIDER = "GITHUB";
+    /** Action used by GitHub provisioning execution service. */
     private static final String ACTION = "CREATE_PRIVATE_REPOSITORY";
+    /** Executable plan statuses used by GitHub provisioning execution service. */
     private static final Set<String> EXECUTABLE_PLAN_STATUSES = Set.of(
             ProvisioningPlanStatus.APPROVED.value(),
             ProvisioningPlanStatus.PROVISIONED.value(),
             ProvisioningPlanStatus.PARTIALLY_COMPLETED.value()
     );
+    /** Logger for this component. */
     private static final Logger logger = LoggerFactory.getLogger(GitHubProvisioningExecutionService.class);
 
+    /** Persistence access for plan. */
     private final ProvisioningPlanRepository planRepository;
+    /** Persistence access for plan item. */
     private final ProvisioningPlanItemRepository planItemRepository;
+    /** Persistence access for commercial flow. */
     private final CommercialFlowRepository commercialFlowRepository;
+    /** Persistence access for run. */
     private final ProvisioningRunRepository runRepository;
+    /** Persistence access for step. */
     private final ProvisioningStepRepository stepRepository;
+    /** Persistence access for external resource. */
     private final ProvisioningExternalResourceRepository externalResourceRepository;
+    /** Repository provisioner. */
     private final GitHubRepositoryProvisioner repositoryProvisioner;
+    /** Properties. */
     private final GitHubAppProperties properties;
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
 
+    /**
+     * Creates the GitHub provisioning execution service with its injected collaborators.
+     *
+     * @param planRepository persistence access for plan
+     * @param planItemRepository persistence access for plan item
+     * @param commercialFlowRepository persistence access for commercial flow
+     * @param runRepository persistence access for run
+     * @param stepRepository persistence access for step
+     * @param externalResourceRepository persistence access for external resource
+     * @param repositoryProvisioner repository provisioner
+     * @param properties properties
+     * @param objectMapper Jackson mapper used to read or write JSON
+     */
     public GitHubProvisioningExecutionService(
             ProvisioningPlanRepository planRepository,
             ProvisioningPlanItemRepository planItemRepository,
@@ -91,6 +118,14 @@ public class GitHubProvisioningExecutionService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Executes private repository.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @param request input carrying execute GitHub repository
+     * @return the GitHub repository execution response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (not found, conflict)
+     */
     public GitHubRepositoryExecutionResponse executePrivateRepository(
             UUID planId,
             ExecuteGitHubRepositoryRequest request
@@ -157,6 +192,12 @@ public class GitHubProvisioningExecutionService {
         }
     }
 
+    /**
+     * Requires confirmation.
+     *
+     * @param request input carrying execute GitHub repository
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (bad request)
+     */
     private void requireConfirmation(ExecuteGitHubRepositoryRequest request) {
         if (request == null || !CONFIRMATION.equals(request.confirmation())) {
             throw new ResponseStatusException(
@@ -166,6 +207,11 @@ public class GitHubProvisioningExecutionService {
         }
     }
 
+    /**
+     * Requires provider execution gate.
+     *
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (conflict, service unavailable)
+     */
     private void requireProviderExecutionGate() {
         if (!properties.canMutateResources()) {
             throw new ResponseStatusException(
@@ -181,6 +227,12 @@ public class GitHubProvisioningExecutionService {
         }
     }
 
+    /**
+     * Requires approved plan.
+     *
+     * @param plan proposed or saved delivery plan
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (conflict)
+     */
     private void requireApprovedPlan(ProvisioningPlanEntity plan) {
         if (!EXECUTABLE_PLAN_STATUSES.contains(plan.getStatus())) {
             throw new ResponseStatusException(
@@ -190,6 +242,12 @@ public class GitHubProvisioningExecutionService {
         }
     }
 
+    /**
+     * Requires activated flow.
+     *
+     * @param flow flow
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (conflict)
+     */
     private void requireActivatedFlow(CommercialFlowEntity flow) {
         boolean active = CommercialPaymentStatus.PAYMENT_CONFIRMED.name().equals(flow.getPaymentStatus())
                 && CommercialClientStatus.CLIENT_ACTIVE.name().equals(flow.getClientStatus())
@@ -204,6 +262,14 @@ public class GitHubProvisioningExecutionService {
         }
     }
 
+    /**
+     * Creates run. Persists changes through {@code runRepository}.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param flow flow
+     * @param idempotencyKey key used to recognize a repeated operation
+     * @return the provisioning run record
+     */
     private ProvisioningRunEntity createRun(
             ProvisioningPlanEntity plan,
             CommercialFlowEntity flow,
@@ -219,6 +285,14 @@ public class GitHubProvisioningExecutionService {
         return runRepository.saveAndFlush(run);
     }
 
+    /**
+     * Creates step. Persists changes through {@code stepRepository}.
+     *
+     * @param run run
+     * @param flow flow
+     * @param idempotencyKey key used to recognize a repeated operation
+     * @return the provisioning step record
+     */
     private ProvisioningStepEntity createStep(
             ProvisioningRunEntity run,
             CommercialFlowEntity flow,
@@ -247,6 +321,12 @@ public class GitHubProvisioningExecutionService {
         return stepRepository.save(step);
     }
 
+    /**
+     * Marks running. Persists changes through {@code stepRepository}.
+     *
+     * @param run run
+     * @param step step
+     */
     private void markRunning(ProvisioningRunEntity run, ProvisioningStepEntity step) {
         Instant now = Instant.now();
         run.setStatus(ProvisioningStepStatus.RUNNING.name());
@@ -262,6 +342,16 @@ public class GitHubProvisioningExecutionService {
         stepRepository.save(step);
     }
 
+    /**
+     * Persists success. Persists changes through {@code runRepository}.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param githubItems GitHub items
+     * @param run run
+     * @param step step
+     * @param result outcome carrying GitHub repository provisioning
+     * @return the provisioning external resource record
+     */
     private ProvisioningExternalResourceEntity persistSuccess(
             ProvisioningPlanEntity plan,
             List<ProvisioningPlanItemEntity> githubItems,
@@ -303,6 +393,15 @@ public class GitHubProvisioningExecutionService {
         return resource;
     }
 
+    /**
+     * Persists failure. Persists changes through {@code runRepository}.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param run run
+     * @param step step
+     * @param safeMessage message suitable for display in the interface
+     * @return the GitHub repository execution response
+     */
     private GitHubRepositoryExecutionResponse persistFailure(
             ProvisioningPlanEntity plan,
             ProvisioningRunEntity run,
@@ -324,6 +423,13 @@ public class GitHubProvisioningExecutionService {
         return response(plan, run, step, null, boundedMessage);
     }
 
+    /**
+     * Finds repository resource.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param externalResourceId identifier assigned by the external provider
+     * @return the provisioning external resource record
+     */
     private ProvisioningExternalResourceEntity findRepositoryResource(
             ProvisioningPlanEntity plan,
             String externalResourceId
@@ -336,6 +442,16 @@ public class GitHubProvisioningExecutionService {
                 .orElse(null);
     }
 
+    /**
+     * Builds {@code GitHubRepositoryExecutionResponse} from {@code ProvisioningPlanEntity}, selecting the fields used by the caller.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param run run
+     * @param step step
+     * @param resource resource
+     * @param message text associated with the operation
+     * @return the GitHub repository execution response
+     */
     private GitHubRepositoryExecutionResponse response(
             ProvisioningPlanEntity plan,
             ProvisioningRunEntity run,
@@ -362,6 +478,13 @@ public class GitHubProvisioningExecutionService {
         );
     }
 
+    /**
+     * Converts the value to JSON.
+     *
+     * @param value stored or supplied representation
+     * @return JSON
+     * @throws IllegalStateException when validation reports “GitHub provisioning input summary could not be stored”
+     */
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);

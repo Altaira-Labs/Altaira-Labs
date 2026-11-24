@@ -22,9 +22,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+/** Exercises commercial email sequence behavior with JUnit. */
 class CommercialEmailSequenceTests {
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * Regression case: renders and sends the four commercial emails through local resend stub.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void rendersAndSendsTheFourCommercialEmailsThroughLocalResendStub() throws Exception {
         List<String> authorizationHeaders = new CopyOnWriteArrayList<>();
@@ -138,6 +145,13 @@ class CommercialEmailSequenceTests {
         }
     }
 
+    /**
+     * Checks the relevant fields of the captured commercial email.
+     *
+     * @param payload data passed across this boundary
+     * @param subject subject
+     * @param expectedHtml expected HTML
+     */
     private void assertEmail(JsonNode payload, String subject, String expectedHtml) {
         assertThat(payload.path("from").asText()).isEqualTo("onboarding@resend.dev");
         assertThat(payload.path("to").get(0).asText()).isEqualTo("marta@example.com");

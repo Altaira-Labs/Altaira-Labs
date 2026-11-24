@@ -22,9 +22,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/** Materialize internal dry-run steps. `executionAllowed=false` remains the default. */
 @Service
 @Transactional
 public class ProvisioningExecutionService {
+    /** Track tasks used by provisioning execution service. */
     private static final Map<String, List<String>> TRACK_TASKS = Map.of(
             "WEB", List.of("Discovery", "Copy and structure", "Design", "Development", "Review", "Launch"),
             "BOOKING", List.of("Requirements", "Calendar rules", "Reminder setup", "Booking test"),
@@ -32,17 +34,34 @@ public class ProvisioningExecutionService {
             "AUTOMATION", List.of("Trigger map", "Action map", "Test", "Monitoring"),
             "DASHBOARD", List.of("KPI definitions", "Data sources", "Layout", "Validation")
     );
+    /** Drive folders used by provisioning execution service. */
     private static final List<String> DRIVE_FOLDERS = List.of(
             "00_Admin", "01_Discovery", "02_Assets", "03_Deliverables", "04_Approvals", "05_Invoices"
     );
 
+    /** Persistence access for run. */
     private final ProvisioningRunRepository runRepository;
+    /** Persistence access for step. */
     private final ProvisioningStepRepository stepRepository;
+    /** Persistence access for plan item. */
     private final ProvisioningPlanItemRepository planItemRepository;
+    /** Provider registry. */
     private final ProvisioningProviderRegistry providerRegistry;
+    /** GitHub properties. */
     private final GitHubAppProperties githubProperties;
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
 
+    /**
+     * Creates the provisioning execution service with its injected collaborators.
+     *
+     * @param runRepository persistence access for run
+     * @param stepRepository persistence access for step
+     * @param planItemRepository persistence access for plan item
+     * @param providerRegistry provider registry
+     * @param githubProperties GitHub properties
+     * @param objectMapper Jackson mapper used to read or write JSON
+     */
     public ProvisioningExecutionService(
             ProvisioningRunRepository runRepository,
             ProvisioningStepRepository stepRepository,
@@ -59,6 +78,14 @@ public class ProvisioningExecutionService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Creates dry run. Persists changes through {@code runRepository}.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param client customer account in scope
+     * @param workspace client workspace in scope
+     * @return the provisioning run record
+     */
     public ProvisioningRunEntity createDryRun(ProvisioningPlanEntity plan, ClientEntity client, ClientWorkspaceEntity workspace) {
         String key = plan.getId() + ":commercial-v1";
         var existing = runRepository.findByIdempotencyKey(key);
@@ -138,11 +165,23 @@ public class ProvisioningExecutionService {
         return runRepository.save(run);
     }
 
+    /**
+     * Maps latest.
+     *
+     * @param plan proposed or saved delivery plan
+     * @return the value produced by this operation
+     */
     @Transactional(readOnly = true)
     public CommercialFlowResponse.ProvisioningRun mapLatest(ProvisioningPlanEntity plan) {
         return runRepository.findAllByPlanOrderByCreatedAtDesc(plan).stream().findFirst().map(this::map).orElse(null);
     }
 
+    /**
+     * Builds {@code CommercialFlowResponse.ProvisioningRun} from {@code ProvisioningRunEntity}, selecting the fields used by the caller.
+     *
+     * @param run run
+     * @return the value produced by this operation
+     */
     private CommercialFlowResponse.ProvisioningRun map(ProvisioningRunEntity run) {
         List<CommercialFlowResponse.ProvisioningStep> steps = stepRepository.findAllByRunOrderByCreatedAt(run).stream()
                 .map(step -> new CommercialFlowResponse.ProvisioningStep(
@@ -152,6 +191,16 @@ public class ProvisioningExecutionService {
         return new CommercialFlowResponse.ProvisioningRun(run.getId(), run.getStatus(), run.isDryRun(), steps);
     }
 
+    /**
+     * Creates step. Persists changes through {@code stepRepository}.
+     *
+     * @param run run
+     * @param track service track within the delivery plan
+     * @param provider integration adapter in use
+     * @param action action being recorded
+     * @param idempotencyPart idempotency part
+     * @param result outcome carrying provisioning
+     */
     private void createStep(
             ProvisioningRunEntity run,
             String track,
@@ -179,6 +228,18 @@ public class ProvisioningExecutionService {
         stepRepository.save(step);
     }
 
+    /**
+     * Builds the provider result for a requested resource.
+     *
+     * @param providerKey key identifying the integration provider
+     * @param track service track within the delivery plan
+     * @param action action being recorded
+     * @param inputSummary input summary
+     * @param credentialsConfigured credentials configured
+     * @param blockWhenCredentialsMissing block when credentials missing
+     * @param missingCredentialsMessage missing credentials message
+     * @return the provisioning result
+     */
     private ProvisioningResult prepare(
             String providerKey,
             String track,
@@ -201,6 +262,14 @@ public class ProvisioningExecutionService {
         );
     }
 
+    /**
+     * Summarizes the planned Jira work for the execution response.
+     *
+     * @param run run
+     * @param track service track within the delivery plan
+     * @param task task
+     * @return the resulting key–value pairs
+     */
     private Map<String, Object> jiraSummary(ProvisioningRunEntity run, String track, String task) {
         Map<String, Object> summary = baseSummary(run, "JIRA");
         summary.put("projectName", run.getWorkspace().getName());
@@ -212,6 +281,13 @@ public class ProvisioningExecutionService {
         return summary;
     }
 
+    /**
+     * Summarizes the planned Drive resource for the execution response.
+     *
+     * @param run run
+     * @param folder folder
+     * @return the resulting key–value pairs
+     */
     private Map<String, Object> driveSummary(ProvisioningRunEntity run, String folder) {
         Map<String, Object> summary = baseSummary(run, "GOOGLE_DRIVE");
         summary.put("rootFolder", run.getWorkspace().getName());
@@ -220,6 +296,12 @@ public class ProvisioningExecutionService {
         return summary;
     }
 
+    /**
+     * Summarizes the planned calendar resource for the execution response.
+     *
+     * @param run run
+     * @return the resulting key–value pairs
+     */
     private Map<String, Object> calendarSummary(ProvisioningRunEntity run) {
         Map<String, Object> summary = baseSummary(run, "GOOGLE_CALENDAR");
         summary.put("eventTitle", "Altaira onboarding - " + run.getClient().getCompany());
@@ -230,6 +312,15 @@ public class ProvisioningExecutionService {
         return summary;
     }
 
+    /**
+     * Builds the readable description for an individual plan item.
+     *
+     * @param run run
+     * @param item item
+     * @param provider integration adapter in use
+     * @param credentialsReady credentials ready
+     * @return the resulting key–value pairs
+     */
     private Map<String, Object> planItemSummary(
             ProvisioningRunEntity run,
             ProvisioningPlanItemEntity item,
@@ -255,6 +346,13 @@ public class ProvisioningExecutionService {
         return summary;
     }
 
+    /**
+     * Populates the fields common to each resource summary.
+     *
+     * @param run run
+     * @param provider integration adapter in use
+     * @return the resulting key–value pairs
+     */
     private Map<String, Object> baseSummary(ProvisioningRunEntity run, String provider) {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("schemaVersion", 1);
@@ -269,10 +367,25 @@ public class ProvisioningExecutionService {
         return summary;
     }
 
+    /**
+     * Limits the action description retained in the result.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String boundedAction(String value) {
         return value.length() <= 100 ? value : value.substring(0, 97) + "...";
     }
 
+    /**
+     * Builds the stable key used to recognize a repeated provisioning operation.
+     *
+     * @param run run
+     * @param provider integration adapter in use
+     * @param track service track within the delivery plan
+     * @param part part
+     * @return the resulting text
+     */
     private String idempotencyKey(ProvisioningRunEntity run, String provider, String track, String part) {
         String raw = run.getId() + ":" + provider + ":" + (track == null ? "shared" : track) + ":" + part;
         if (raw.length() <= 240) return raw;
@@ -280,6 +393,13 @@ public class ProvisioningExecutionService {
         return raw.substring(0, 200) + ":" + digest;
     }
 
+    /**
+     * Reads track keys.
+     *
+     * @param json JSON
+     * @return the string items
+     * @throws IllegalStateException when validation reports “Provisioning tracks could not be read”
+     */
     private List<String> readTrackKeys(String json) {
         if (json == null || json.isBlank()) return List.of();
         try {
@@ -290,6 +410,12 @@ public class ProvisioningExecutionService {
         }
     }
 
+    /**
+     * Reads summary.
+     *
+     * @param json JSON
+     * @return the resulting key–value pairs
+     */
     private Map<String, Object> readSummary(String json) {
         if (json == null || json.isBlank()) return Map.of();
         try {
@@ -299,6 +425,13 @@ public class ProvisioningExecutionService {
         }
     }
 
+    /**
+     * Converts the value to JSON.
+     *
+     * @param value stored or supplied representation
+     * @return JSON
+     * @throws IllegalStateException when validation reports “Provisioning step summary could not be stored”
+     */
     private String toJson(Object value) {
         try { return objectMapper.writeValueAsString(value); }
         catch (JsonProcessingException exception) { throw new IllegalStateException("Provisioning step summary could not be stored", exception); }

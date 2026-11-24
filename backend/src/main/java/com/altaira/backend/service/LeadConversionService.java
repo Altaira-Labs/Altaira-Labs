@@ -23,19 +23,46 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Turns a sales enquiry into a customer account with assigned services in a single transaction.
+ * <p>The normal entry point follows payment confirmation for an approved plan. The separate
+ * direct-conversion entry point is guarded by a legacy configuration switch.
+ * <p>Conversion keeps the relationship to the original lead, removes duplicate service keys,
+ * assigns the contracted services and marks the lead as converted.
+ */
 @Service
 @Transactional
 public class LeadConversionService {
 
+    /** Persistence access for lead. */
     private final LeadRepository leadRepository;
+    /** Persistence access for client. */
     private final ClientRepository clientRepository;
+    /** Client management operations used by this component. */
     private final ClientManagementService clientManagementService;
+    /** Client service assignment operations used by this component. */
     private final ClientServiceAssignmentService clientServiceAssignmentService;
+    /** Service catalog operations used by this component. */
     private final ServiceCatalogService serviceCatalogService;
+    /** Client portal operations used by this component. */
     private final ClientPortalService clientPortalService;
+    /** Lead operations used by this component. */
     private final LeadService leadService;
+    /** Whether legacy direct conversion is enabled. */
     private final boolean legacyDirectConversionEnabled;
 
+    /**
+     * Creates the lead conversion service with its injected collaborators.
+     *
+     * @param leadRepository persistence access for lead
+     * @param clientRepository persistence access for client
+     * @param clientManagementService client management operations used by this component
+     * @param clientServiceAssignmentService client service assignment operations used by this component
+     * @param serviceCatalogService service catalog operations used by this component
+     * @param clientPortalService client portal operations used by this component
+     * @param leadService lead operations used by this component
+     * @param legacyDirectConversionEnabled whether legacy direct conversion is enabled
+     */
     public LeadConversionService(
             LeadRepository leadRepository,
             ClientRepository clientRepository,
@@ -56,6 +83,14 @@ public class LeadConversionService {
         this.legacyDirectConversionEnabled = legacyDirectConversionEnabled;
     }
 
+    /**
+     * Handles the legacy direct-conversion path. When direct conversion is disabled, callers must confirm payment against an approved plan.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @param request input carrying lead conversion
+     * @return the lead conversion response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (conflict)
+     */
     public LeadConversionResponse convert(UUID leadId, LeadConversionRequest request) {
         if (!legacyDirectConversionEnabled) {
             throw new ResponseStatusException(
@@ -66,6 +101,14 @@ public class LeadConversionService {
         return convertInternal(leadId, request);
     }
 
+    /**
+     * Builds a confirmed conversion request from the paid plan’s service keys and carries it through the usual lead-to-client workflow.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @param serviceKeys catalogue keys identifying the requested deliveries
+     * @param notes free-text notes associated with the item
+     * @return the lead conversion response
+     */
     public LeadConversionResponse convertAfterConfirmedPayment(
             UUID leadId,
             List<String> serviceKeys,
@@ -78,6 +121,15 @@ public class LeadConversionService {
         return convertInternal(leadId, request);
     }
 
+    /**
+     * Resolves the lead, removes duplicate service keys, assigns the selected catalogue services and marks the lead as converted. The response distinguishes an existing customer from one created during this conversion.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @param request input carrying lead conversion
+     * @return the lead conversion response
+     * @throws IllegalArgumentException when validation reports “At least one launch service is required”
+     * @throws com.altaira.backend.exception.LeadNotFoundException if the sales enquiry does not exist
+     */
     private LeadConversionResponse convertInternal(UUID leadId, LeadConversionRequest request) {
         LeadEntity lead = leadRepository.findById(leadId)
                 .orElseThrow(() -> new LeadNotFoundException(leadId));
@@ -118,6 +170,12 @@ public class LeadConversionService {
         );
     }
 
+    /**
+     * Trims surrounding whitespace. Absent values use an empty string.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String trimOptional(String value) {
         return value == null || value.isBlank() ? "" : value.trim();
     }

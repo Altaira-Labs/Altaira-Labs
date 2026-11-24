@@ -39,6 +39,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Exercises commercial flow endpoint behavior with JUnit. Individual cases include {@code commercialEndpointsEnforceApprovalValidationAuthenticationAndSignedWebhook} and {@code unpaidFailedAndExpiredStripeEventsNeverActivateAClient}.
+ */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:commercial_endpoint_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
         "altaira.commercial.legacy-direct-conversion-enabled=false",
@@ -57,20 +60,37 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @Transactional
 class CommercialFlowEndpointTests {
+    /** Internal token used by commercial flow endpoint tests. */
     private static final String INTERNAL_TOKEN = "test-internal-token";
+    /** Webhook secret used by commercial flow endpoint tests. */
     private static final String WEBHOOK_SECRET = "whsec_test_commercial_endpoint";
 
+    /** Mock mvc. */
     @Autowired private MockMvc mockMvc;
+    /** Jackson mapper used to read or write JSON. */
     @Autowired private ObjectMapper objectMapper;
+    /** Persistence access for lead. */
     @Autowired private LeadRepository leadRepository;
+    /** Persistence access for assessment. */
     @Autowired private LeadAssessmentRepository assessmentRepository;
+    /** Persistence access for plan. */
     @Autowired private ProvisioningPlanRepository planRepository;
+    /** Persistence access for flow. */
     @Autowired private CommercialFlowRepository flowRepository;
+    /** Persistence access for payment session. */
     @Autowired private CommercialPaymentSessionRepository paymentSessionRepository;
+    /** Persistence access for payment event. */
     @Autowired private CommercialPaymentEventRepository paymentEventRepository;
+    /** Persistence access for client. */
     @Autowired private ClientRepository clientRepository;
+    /** Persistence access for workspace. */
     @Autowired private ClientWorkspaceRepository workspaceRepository;
 
+    /**
+     * Regression case: commercial endpoints enforce approval validation authentication and signed webhook.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void commercialEndpointsEnforceApprovalValidationAuthenticationAndSignedWebhook() throws Exception {
         ProvisioningPlanEntity draftPlan = plan(ProvisioningPlanStatus.DRAFT);
@@ -158,6 +178,11 @@ class CommercialFlowEndpointTests {
         assertThat(paymentEventRepository.count()).isEqualTo(1);
     }
 
+    /**
+     * Regression case: unpaid failed and expired Stripe events never activate a client.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void unpaidFailedAndExpiredStripeEventsNeverActivateAClient() throws Exception {
         ProvisioningPlanEntity failedPlan = plan(ProvisioningPlanStatus.APPROVED);
@@ -214,6 +239,12 @@ class CommercialFlowEndpointTests {
         assertThat(paymentEventRepository.count()).isEqualTo(3);
     }
 
+    /**
+     * Creates checkout.
+     *
+     * @param plan proposed or saved delivery plan
+     * @throws Exception if the operation cannot complete
+     */
     private void createCheckout(ProvisioningPlanEntity plan) throws Exception {
         mockMvc.perform(post("/api/v1/provisioning-plans/{planId}/payments/checkout", plan.getId())
                         .header("X-Internal-API-Token", INTERNAL_TOKEN)
@@ -222,11 +253,23 @@ class CommercialFlowEndpointTests {
                 .andExpect(status().isOk());
     }
 
+    /**
+     * Reads the most recent payment session created by the checkout test.
+     *
+     * @param plan proposed or saved delivery plan
+     * @return the commercial payment session record
+     */
     private CommercialPaymentSessionEntity latestSession(ProvisioningPlanEntity plan) {
         CommercialFlowEntity flow = flowRepository.findByPlan(plan).orElseThrow();
         return paymentSessionRepository.findAllByFlowOrderByCreatedAtDesc(flow).getFirst();
     }
 
+    /**
+     * Sends webhook.
+     *
+     * @param payload data passed across this boundary
+     * @throws Exception if the operation cannot complete
+     */
     private void sendWebhook(String payload) throws Exception {
         mockMvc.perform(post("/api/v1/payments/stripe/webhook")
                         .header("Stripe-Signature", stripeSignature(payload))
@@ -236,6 +279,13 @@ class CommercialFlowEndpointTests {
                 .andExpect(jsonPath("$.received").value(true));
     }
 
+    /**
+     * Checks the commercial state returned by the tested endpoint.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param paymentStatus current payment state
+     * @throws Exception if the operation cannot complete
+     */
     private void assertFlowStatus(ProvisioningPlanEntity plan, String paymentStatus) throws Exception {
         mockMvc.perform(get("/api/v1/provisioning-plans/{planId}/commercial-flow", plan.getId())
                         .header("X-Internal-API-Token", INTERNAL_TOKEN))
@@ -245,6 +295,13 @@ class CommercialFlowEndpointTests {
                 .andExpect(jsonPath("$.workspaceStatus").value("WORKSPACE_PENDING"));
     }
 
+    /**
+     * Constructs the plan fixture used to exercise the checkout endpoint. Persists changes through {@code planRepository}.
+     *
+     * @param status current state in the workflow
+     * @return the provisioning plan record
+     * @throws Exception if the operation cannot complete
+     */
     private ProvisioningPlanEntity plan(ProvisioningPlanStatus status) throws Exception {
         String suffix = UUID.randomUUID().toString();
         LeadEntity lead = new LeadEntity();
@@ -286,6 +343,12 @@ class CommercialFlowEndpointTests {
         return planRepository.saveAndFlush(plan);
     }
 
+    /**
+     * Supplies a track fixture for the commercial or provisioning scenario.
+     *
+     * @param key key used to identify the item
+     * @return the resulting key–value pairs
+     */
     private Map<String, Object> track(String key) {
         return Map.ofEntries(
                 Map.entry("track", key),
@@ -302,6 +365,13 @@ class CommercialFlowEndpointTests {
         );
     }
 
+    /**
+     * Builds the request body sent by the checkout tests.
+     *
+     * @param amountMinor checkout amount in the currency’s smallest unit
+     * @return the resulting text
+     * @throws Exception if the operation cannot complete
+     */
     private String checkoutBody(long amountMinor) throws Exception {
         return objectMapper.writeValueAsString(Map.of(
                 "amountMinor", amountMinor,
@@ -310,10 +380,28 @@ class CommercialFlowEndpointTests {
         ));
     }
 
+    /**
+     * Builds the string fixture used by the commercial flow endpoint tests.
+     *
+     * @param eventId identifier of the event
+     * @param sessionId identifier of the session
+     * @return the resulting text
+     * @throws Exception if the operation cannot complete
+     */
     private String webhookPayload(String eventId, String sessionId) throws Exception {
         return webhookPayload(eventId, "checkout.session.completed", sessionId, "paid");
     }
 
+    /**
+     * Builds the string fixture used by the commercial flow endpoint tests.
+     *
+     * @param eventId identifier of the event
+     * @param eventType event type
+     * @param sessionId identifier of the session
+     * @param paymentStatus current payment state
+     * @return the resulting text
+     * @throws Exception if the operation cannot complete
+     */
     private String webhookPayload(String eventId, String eventType, String sessionId, String paymentStatus) throws Exception {
         return objectMapper.writeValueAsString(Map.of(
                 "id", eventId,
@@ -328,6 +416,13 @@ class CommercialFlowEndpointTests {
         ));
     }
 
+    /**
+     * Builds the string fixture used by the commercial flow endpoint tests.
+     *
+     * @param payload data passed across this boundary
+     * @return the resulting text
+     * @throws Exception if the operation cannot complete
+     */
     private String stripeSignature(String payload) throws Exception {
         long timestamp = Instant.now().getEpochSecond();
         Mac mac = Mac.getInstance("HmacSHA256");

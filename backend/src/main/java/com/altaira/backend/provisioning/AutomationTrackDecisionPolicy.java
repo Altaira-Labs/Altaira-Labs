@@ -6,19 +6,37 @@ import com.altaira.backend.model.ProvisioningRoute;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Selects tools, delivery work and manual steps for the automation service track. */
 public final class AutomationTrackDecisionPolicy implements TrackDecisionPolicy {
 
+    /** Tools included in the delivery decision. */
     private final ProvisioningToolCatalog tools;
 
+    /**
+     * Constructs {@code AutomationTrackDecisionPolicy} using the supplied tools.
+     *
+     * @param tools tools included in the delivery decision
+     */
     public AutomationTrackDecisionPolicy(ProvisioningToolCatalog tools) {
         this.tools = tools;
     }
 
+    /**
+     * Identifies the track this policy handles for the automation track.
+     *
+     * @return the provisioning track
+     */
     @Override
     public ProvisioningTrack track() {
         return ProvisioningTrack.AUTOMATION;
     }
 
+    /**
+     * Determines whether supports applies.
+     *
+     * @param context context carrying provisioning decision
+     * @return true when the check succeeds
+     */
     @Override
     public boolean supports(ProvisioningDecisionContext context) {
         return context.recommends(track())
@@ -26,6 +44,12 @@ public final class AutomationTrackDecisionPolicy implements TrackDecisionPolicy 
                 || context.requirements().has(RequirementSet.AUTOMATION);
     }
 
+    /**
+     * Applies the automation track rules to the supplied discovery context and returns a plan for that track.
+     *
+     * @param context context carrying provisioning decision
+     * @return the track decision
+     */
     @Override
     public TrackDecision decide(ProvisioningDecisionContext context) {
         boolean custom = !context.isGeneral()
@@ -71,11 +95,24 @@ public final class AutomationTrackDecisionPolicy implements TrackDecisionPolicy 
         );
     }
 
+    /**
+     * Checks whether this is simple internal.
+     *
+     * @param context context carrying provisioning decision
+     * @return true if the value is simple internal
+     */
     private boolean isSimpleInternal(ProvisioningDecisionContext context) {
         return context.integer("monthlyVolume") < 100
                 && (context.equalsAny("channels", "email", "altaira crm"));
     }
 
+    /**
+     * Chooses which tools to include or exclude for the proposed work for the automation track.
+     *
+     * @param context context carrying provisioning decision
+     * @param custom custom
+     * @return the tool decision items
+     */
     private List<ProvisioningDecision.ToolDecision> selectedTools(
             ProvisioningDecisionContext context,
             boolean custom
@@ -125,6 +162,13 @@ public final class AutomationTrackDecisionPolicy implements TrackDecisionPolicy 
         return result;
     }
 
+    /**
+     * Collects the work that still requires a person for the automation track.
+     *
+     * @param context context carrying provisioning decision
+     * @param custom custom
+     * @return the manual step decision items
+     */
     private List<ProvisioningDecision.ManualStepDecision> manualSteps(
             ProvisioningDecisionContext context,
             boolean custom
@@ -183,6 +227,13 @@ public final class AutomationTrackDecisionPolicy implements TrackDecisionPolicy 
         return result;
     }
 
+    /**
+     * Describes the deliverables to include in the plan for the automation track.
+     *
+     * @param context context carrying provisioning decision
+     * @param selected selected
+     * @return the plan item decision items
+     */
     private List<ProvisioningDecision.PlanItemDecision> planItems(
             ProvisioningDecisionContext context,
             List<ProvisioningDecision.ToolDecision> selected

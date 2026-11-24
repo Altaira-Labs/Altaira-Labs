@@ -8,8 +8,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Exercises provisioning provider registry behavior with JUnit. */
 class ProvisioningProviderRegistryTests {
 
+    /** Regression case: returns typed dry run blocked and manual results without external resources. */
     @Test
     void returnsTypedDryRunBlockedAndManualResultsWithoutExternalResources() {
         ProvisioningProviderRegistry registry = new ProvisioningProviderRegistry(List.of(
@@ -45,6 +47,14 @@ class ProvisioningProviderRegistryTests {
                 .allMatch(result -> Boolean.TRUE.equals(result.inputSummary().get("dryRun")));
     }
 
+    /**
+     * Constructs the example request accepted by the component under test.
+     *
+     * @param credentialsConfigured credentials configured
+     * @param blockWhenCredentialsMissing block when credentials missing
+     * @param missingCredentialsMessage missing credentials message
+     * @return the provisioning request
+     */
     private ProvisioningRequest request(
             boolean credentialsConfigured,
             boolean blockWhenCredentialsMissing,

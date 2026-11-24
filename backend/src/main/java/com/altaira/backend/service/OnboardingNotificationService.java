@@ -20,19 +20,38 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/** Coordinates onboarding notification operations in the backend. */
 @Service
 public class OnboardingNotificationService {
 
+    /** Logger for this component. */
     private static final Logger logger = LoggerFactory.getLogger(OnboardingNotificationService.class);
 
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
+    /** Whether the capability is enabled. */
     private final boolean enabled;
+    /** Key identifying the resend API. */
     private final String resendApiKey;
+    /** URL for resend API. */
     private final URI resendApiUrl;
+    /** Notification from. */
     private final String notificationFrom;
+    /** Admin to. */
     private final String adminTo;
+    /** Client used to send the outbound HTTP request. */
     private final HttpClient httpClient;
 
+    /**
+     * Constructs {@code OnboardingNotificationService} using the supplied object mapper, enabled, resend API key and remaining fields.
+     *
+     * @param objectMapper Jackson mapper used to read or write JSON
+     * @param enabled whether the capability is enabled
+     * @param resendApiKey key identifying the resend API
+     * @param resendApiUrl URL for resend API
+     * @param notificationFrom notification from
+     * @param adminTo admin to
+     */
     public OnboardingNotificationService(
             ObjectMapper objectMapper,
             @Value("${altaira.onboarding.email.enabled:true}") boolean enabled,
@@ -61,6 +80,14 @@ public class OnboardingNotificationService {
         );
     }
 
+    /**
+     * Sends contract submitted.
+     *
+     * @param client customer account in scope
+     * @param task task
+     * @param signedPdf signed PDF
+     * @return the email notification result
+     */
     public EmailNotificationResult sendContractSubmitted(ClientEntity client, OnboardingTaskEntity task, byte[] signedPdf) {
         if (!isConfigured()) {
             return EmailNotificationResult.notSent("Onboarding email notification is not configured.");
@@ -90,6 +117,12 @@ public class OnboardingNotificationService {
         }
     }
 
+    /**
+     * Sends onboarding ready for review.
+     *
+     * @param client customer account in scope
+     * @return the email notification result
+     */
     public EmailNotificationResult sendOnboardingReadyForReview(ClientEntity client) {
         if (!isConfigured()) {
             return EmailNotificationResult.notSent("Onboarding email notification is not configured.");
@@ -119,6 +152,13 @@ public class OnboardingNotificationService {
         }
     }
 
+    /**
+     * Sends client invitation.
+     *
+     * @param client customer account in scope
+     * @param invitationUrl URL for invitation
+     * @return the email notification result
+     */
     public EmailNotificationResult sendClientInvitation(ClientEntity client, String invitationUrl) {
         if (!isConfigured()) {
             return EmailNotificationResult.notSent("Client invitation email is not configured.");
@@ -139,10 +179,25 @@ public class OnboardingNotificationService {
         }
     }
 
+    /**
+     * Checks whether this is configured.
+     *
+     * @return true if the value is configured
+     */
     private boolean isConfigured() {
         return enabled && !resendApiKey.isBlank() && !notificationFrom.isBlank();
     }
 
+    /**
+     * Sends email.
+     *
+     * @param to to
+     * @param subject subject
+     * @param html html
+     * @param attachments attachments
+     * @throws IllegalArgumentException when validation reports “Email recipient is required”
+     * @throws IllegalStateException when validation reports “Resend onboarding email request failed” or “Resend onboarding email request interrupted”
+     */
     private void sendEmail(String to, String subject, String html, List<Map<String, Object>> attachments) {
         if (to == null || to.isBlank()) {
             throw new IllegalArgumentException("Email recipient is required");
@@ -179,6 +234,13 @@ public class OnboardingNotificationService {
         }
     }
 
+    /**
+     * Constructs the PDF attachment used for the onboarding email.
+     *
+     * @param filename filename
+     * @param pdf pdf
+     * @return the resulting key–value pairs
+     */
     private Map<String, Object> pdfAttachment(String filename, byte[] pdf) {
         Map<String, Object> attachment = new LinkedHashMap<>();
         attachment.put("filename", filename);
@@ -186,6 +248,13 @@ public class OnboardingNotificationService {
         return attachment;
     }
 
+    /**
+     * Renders the client-facing contract message as HTML.
+     *
+     * @param client customer account in scope
+     * @param task task
+     * @return the resulting text
+     */
     private String contractClientHtml(ClientEntity client, OnboardingTaskEntity task) {
         return emailShell(
                 "Contract received",
@@ -197,6 +266,13 @@ public class OnboardingNotificationService {
         );
     }
 
+    /**
+     * Renders the staff-facing contract message as HTML.
+     *
+     * @param client customer account in scope
+     * @param task task
+     * @return the resulting text
+     */
     private String contractAdminHtml(ClientEntity client, OnboardingTaskEntity task) {
         return emailShell(
                 "Client contract signed",
@@ -208,6 +284,12 @@ public class OnboardingNotificationService {
         );
     }
 
+    /**
+     * Renders the completion update sent to staff.
+     *
+     * @param client customer account in scope
+     * @return the resulting text
+     */
     private String onboardingCompleteAdminHtml(ClientEntity client) {
         return emailShell(
                 "Onboarding ready for review",
@@ -216,6 +298,12 @@ public class OnboardingNotificationService {
         );
     }
 
+    /**
+     * Renders the completion message sent to the customer.
+     *
+     * @param client customer account in scope
+     * @return the resulting text
+     */
     private String onboardingCompleteClientHtml(ClientEntity client) {
         return emailShell(
                 "Onboarding information received",
@@ -224,6 +312,13 @@ public class OnboardingNotificationService {
         );
     }
 
+    /**
+     * Renders the invitation message for the workspace user.
+     *
+     * @param client customer account in scope
+     * @param invitationUrl URL for invitation
+     * @return the resulting text
+     */
     private String clientInvitationHtml(ClientEntity client, String invitationUrl) {
         return emailShell(
                 "Client workspace access",
@@ -234,6 +329,14 @@ public class OnboardingNotificationService {
         );
     }
 
+    /**
+     * Places the message body inside the common email layout.
+     *
+     * @param label display label
+     * @param title short heading shown to a reader
+     * @param body request or response content
+     * @return the resulting text
+     */
     private String emailShell(String label, String title, String body) {
         return """
                 <div style="margin:0;padding:32px;background:#e5e7eb;font-family:Arial,sans-serif;color:#020617;">
@@ -252,6 +355,13 @@ public class OnboardingNotificationService {
                 """.formatted(escape(title), escape(label), escape(label), body);
     }
 
+    /**
+     * Converts the value to JSON.
+     *
+     * @param payload data passed across this boundary
+     * @return JSON
+     * @throws IllegalArgumentException when validation reports “Could not serialize onboarding email payload”
+     */
     private String toJson(Map<String, Object> payload) {
         try {
             return objectMapper.writeValueAsString(payload);
@@ -260,6 +370,12 @@ public class OnboardingNotificationService {
         }
     }
 
+    /**
+     * Removes line breaks and trims the text before it is used in a mail header.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String cleanSubject(String value) {
         if (value == null || value.isBlank()) {
             return "client";
@@ -268,6 +384,12 @@ public class OnboardingNotificationService {
         return value.replaceAll("[\\r\\n]+", " ").trim();
     }
 
+    /**
+     * Prepares the text for inclusion in the notification body.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String safeBody(String value) {
         if (value == null) {
             return "";
@@ -276,6 +398,12 @@ public class OnboardingNotificationService {
         return value.length() <= 500 ? value : value.substring(0, 500);
     }
 
+    /**
+     * Escapes special characters before embedding the value in generated markup.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String escape(Object value) {
         String raw = value == null ? "" : String.valueOf(value);
         return raw

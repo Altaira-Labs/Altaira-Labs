@@ -14,14 +14,28 @@ import java.util.regex.Pattern;
 @Service
 public class GitHubRepositoryProvisioner {
 
+    /** Safe repository name used by GitHub repository provisioner. */
     private static final Pattern SAFE_REPOSITORY_NAME = Pattern.compile("[a-z0-9](?:[a-z0-9._-]{0,98}[a-z0-9])?");
+    /** Safe organization name used by GitHub repository provisioner. */
     private static final Pattern SAFE_ORGANIZATION_NAME = Pattern.compile("[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?");
 
+    /** Properties. */
     private final GitHubAppProperties properties;
+    /** Api client. */
     private final GitHubApiClient apiClient;
+    /** Token provider. */
     private final GitHubInstallationTokenProvider tokenProvider;
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
 
+    /**
+     * Creates the GitHub repository provisioner with its injected collaborators.
+     *
+     * @param properties properties
+     * @param apiClient api client
+     * @param tokenProvider token provider
+     * @param objectMapper Jackson mapper used to read or write JSON
+     */
     public GitHubRepositoryProvisioner(
             GitHubAppProperties properties,
             GitHubApiClient apiClient,
@@ -34,6 +48,13 @@ public class GitHubRepositoryProvisioner {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Ensures private repository.
+     *
+     * @param repositoryName repository name
+     * @param description human-readable description
+     * @return the GitHub repository provisioning result
+     */
     public GitHubRepositoryProvisioningResult ensurePrivateRepository(
             String repositoryName,
             String description
@@ -79,6 +100,14 @@ public class GitHubRepositoryProvisioner {
         }
     }
 
+    /**
+     * Finds existing repository.
+     *
+     * @param organization organization
+     * @param repositoryName repository name
+     * @param installationToken credential for installation
+     * @return the JSON node
+     */
     private JsonNode findExistingRepository(String organization, String repositoryName, String installationToken) {
         try {
             return apiClient.get(
@@ -93,6 +122,16 @@ public class GitHubRepositoryProvisioner {
         }
     }
 
+    /**
+     * Checks that the returned repository belongs to the expected organization and is private before describing the outcome.
+     *
+     * @param repository repository
+     * @param created whether a resource was created
+     * @param reused whether an existing resource was used
+     * @param expectedOrganization expected organization
+     * @param expectedName expected name
+     * @return the GitHub repository provisioning result
+     */
     private GitHubRepositoryProvisioningResult validatedResult(
             JsonNode repository,
             boolean created,
@@ -122,6 +161,7 @@ public class GitHubRepositoryProvisioner {
         );
     }
 
+    /** Requires execution gate. */
     private void requireExecutionGate() {
         if (!properties.canMutateResources()) {
             throw GitHubIntegrationException.safe(
@@ -130,6 +170,12 @@ public class GitHubRepositoryProvisioner {
         }
     }
 
+    /**
+     * Validates repository name.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String validateRepositoryName(String value) {
         String trimmed = value == null ? "" : value.trim();
         if (!SAFE_REPOSITORY_NAME.matcher(trimmed).matches()) {
@@ -138,6 +184,12 @@ public class GitHubRepositoryProvisioner {
         return trimmed;
     }
 
+    /**
+     * Validates organization.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String validateOrganization(String value) {
         String trimmed = value == null ? "" : value.trim();
         if (!SAFE_ORGANIZATION_NAME.matcher(trimmed).matches()) {

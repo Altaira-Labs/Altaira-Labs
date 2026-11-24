@@ -46,26 +46,45 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * Exercises Jira provisioning execution service behavior with JUnit. Individual cases include {@code requiresExactConfirmationBeforeReadingPlanData} and {@code continuesIndependentTasksAndMarksPartialCompletion}.
+ */
 class JiraProvisioningExecutionServiceTests {
 
+    /** Persistence access for plan. */
     private final ProvisioningPlanRepository planRepository = mock(ProvisioningPlanRepository.class);
+    /** Persistence access for commercial flow. */
     private final CommercialFlowRepository commercialFlowRepository = mock(CommercialFlowRepository.class);
+    /** Persistence access for run. */
     private final ProvisioningRunRepository runRepository = mock(ProvisioningRunRepository.class);
+    /** Persistence access for step. */
     private final ProvisioningStepRepository stepRepository = mock(ProvisioningStepRepository.class);
+    /** Persistence access for external resource. */
     private final ProvisioningExternalResourceRepository externalResourceRepository =
             mock(ProvisioningExternalResourceRepository.class);
+    /** Issue provisioner. */
     private final JiraIssueProvisioner issueProvisioner = mock(JiraIssueProvisioner.class);
 
+    /** Identifier of the saved provisioning plan. */
     private final UUID planId = UUID.fromString("ce35f5af-d0bf-4f15-867f-3795f4932a0e");
+    /** Identifier of the source step. */
     private final UUID sourceStepId = UUID.fromString("026e0e20-5006-4850-ab4d-13263b42dd62");
+    /** Runs. */
     private final Map<String, ProvisioningRunEntity> runs = new HashMap<>();
+    /** Ordered steps of the operation. */
     private final Map<String, ProvisioningStepEntity> steps = new HashMap<>();
+    /** Resources. */
     private final Map<String, ProvisioningExternalResourceEntity> resources = new HashMap<>();
+    /** Proposed or saved delivery plan. */
     private ProvisioningPlanEntity plan;
+    /** Flow. */
     private CommercialFlowEntity flow;
+    /** Source run. */
     private ProvisioningRunEntity sourceRun;
+    /** Source step. */
     private ProvisioningStepEntity sourceStep;
 
+    /** Sets up. Persists changes through {@code externalResourceRepository}. */
     @BeforeEach
     void setUp() {
         plan = approvedPlan();
@@ -96,6 +115,7 @@ class JiraProvisioningExecutionServiceTests {
         });
     }
 
+    /** Regression case: requires exact confirmation before reading plan data. */
     @Test
     void requiresExactConfirmationBeforeReadingPlanData() {
         JiraProvisioningExecutionService service = service(liveProperties());
@@ -109,6 +129,7 @@ class JiraProvisioningExecutionServiceTests {
         verify(issueProvisioner, never()).ensureTask(anyString(), anyString(), anyList(), anyString());
     }
 
+    /** Regression case: dry run gate blocks before persisting live run. */
     @Test
     void dryRunGateBlocksBeforePersistingLiveRun() {
         JiraProvisioningExecutionService service = service(properties(true, true, true));
@@ -122,6 +143,7 @@ class JiraProvisioningExecutionServiceTests {
         verify(issueProvisioner, never()).ensureTask(anyString(), anyString(), anyList(), anyString());
     }
 
+    /** Regression case: creates approved issue once and reuses persisted result. */
     @Test
     void createsApprovedIssueOnceAndReusesPersistedResult() {
         when(issueProvisioner.ensureTask(anyString(), anyString(), anyList(), anyString()))
@@ -155,6 +177,7 @@ class JiraProvisioningExecutionServiceTests {
         );
     }
 
+    /** Regression case: persists safe failure and retries only failed issue. */
     @Test
     void persistsSafeFailureAndRetriesOnlyFailedIssue() {
         when(issueProvisioner.ensureTask(anyString(), anyString(), anyList(), anyString()))
@@ -178,6 +201,7 @@ class JiraProvisioningExecutionServiceTests {
                 .ensureTask(anyString(), anyString(), anyList(), anyString());
     }
 
+    /** Regression case: continues independent tasks and marks partial completion. */
     @Test
     void continuesIndependentTasksAndMarksPartialCompletion() {
         ProvisioningStepEntity secondStep = sourceStep(
@@ -202,6 +226,12 @@ class JiraProvisioningExecutionServiceTests {
                 .ensureTask(anyString(), anyString(), anyList(), anyString());
     }
 
+    /**
+     * Builds the Jira provisioning execution service fixture used by the Jira provisioning execution service tests.
+     *
+     * @param properties properties
+     * @return the Jira provisioning execution service
+     */
     private JiraProvisioningExecutionService service(JiraProperties properties) {
         return new JiraProvisioningExecutionService(
                 planRepository,
@@ -215,6 +245,12 @@ class JiraProvisioningExecutionServiceTests {
         );
     }
 
+    /**
+     * Saves run.
+     *
+     * @param run run
+     * @return the provisioning run record
+     */
     private ProvisioningRunEntity saveRun(ProvisioningRunEntity run) {
         if (run.getId() == null) {
             ReflectionTestUtils.setField(run, "id", UUID.fromString("6506370e-8937-4586-8916-d325702ef5d6"));
@@ -223,6 +259,12 @@ class JiraProvisioningExecutionServiceTests {
         return run;
     }
 
+    /**
+     * Saves step.
+     *
+     * @param step step
+     * @return the provisioning step record
+     */
     private ProvisioningStepEntity saveStep(ProvisioningStepEntity step) {
         if (step.getId() == null) {
             ReflectionTestUtils.setField(step, "id", UUID.fromString("7db4f20e-151a-4d3f-af14-9719c4f8c402"));
@@ -231,6 +273,11 @@ class JiraProvisioningExecutionServiceTests {
         return step;
     }
 
+    /**
+     * Builds the provisioning plan entity fixture used by the Jira provisioning execution service tests.
+     *
+     * @return the provisioning plan record
+     */
     private ProvisioningPlanEntity approvedPlan() {
         ProvisioningPlanEntity entity = new ProvisioningPlanEntity();
         entity.setId(planId);
@@ -238,6 +285,12 @@ class JiraProvisioningExecutionServiceTests {
         return entity;
     }
 
+    /**
+     * Builds the commercial flow entity fixture used by the Jira provisioning execution service tests.
+     *
+     * @param entity record carrying provisioning plan
+     * @return the commercial flow record
+     */
     private CommercialFlowEntity activeFlow(ProvisioningPlanEntity entity) {
         ClientEntity client = new ClientEntity();
         client.setId(UUID.fromString("329076bf-c206-466c-a586-a31f838b7317"));
@@ -260,6 +313,13 @@ class JiraProvisioningExecutionServiceTests {
         return commercialFlow;
     }
 
+    /**
+     * Builds the originating run used to trace the Jira issue to its plan.
+     *
+     * @param entity record carrying provisioning plan
+     * @param commercialFlow commercial flow
+     * @return the provisioning run record
+     */
     private ProvisioningRunEntity sourceRun(
             ProvisioningPlanEntity entity,
             CommercialFlowEntity commercialFlow
@@ -275,10 +335,25 @@ class JiraProvisioningExecutionServiceTests {
         return run;
     }
 
+    /**
+     * Builds the originating step used to test Jira execution and reuse.
+     *
+     * @param run run
+     * @return the provisioning step record
+     */
     private ProvisioningStepEntity sourceStep(ProvisioningRunEntity run) {
         return sourceStep(run, sourceStepId, "WEB", "Discovery");
     }
 
+    /**
+     * Builds the originating step used to test Jira execution and reuse.
+     *
+     * @param run run
+     * @param id unique identifier of the record
+     * @param track service track within the delivery plan
+     * @param summary summary
+     * @return the provisioning step record
+     */
     private ProvisioningStepEntity sourceStep(
             ProvisioningRunEntity run,
             UUID id,
@@ -297,10 +372,20 @@ class JiraProvisioningExecutionServiceTests {
         return step;
     }
 
+    /**
+     * Builds the execute Jira issues request fixture used by the Jira provisioning execution service tests.
+     *
+     * @return the execute Jira issues request
+     */
     private ExecuteJiraIssuesRequest confirmedRequest() {
         return new ExecuteJiraIssuesRequest(JiraProvisioningExecutionService.CONFIRMATION);
     }
 
+    /**
+     * Builds the Jira issue provisioning result fixture used by the Jira provisioning execution service tests.
+     *
+     * @return the Jira issue provisioning result
+     */
     private JiraIssueProvisioningResult createdResult() {
         return new JiraIssueProvisioningResult(
                 true,
@@ -311,10 +396,23 @@ class JiraProvisioningExecutionServiceTests {
         );
     }
 
+    /**
+     * Enables the configuration needed to exercise the local integration double.
+     *
+     * @return the Jira properties
+     */
     private JiraProperties liveProperties() {
         return properties(true, true, false);
     }
 
+    /**
+     * Builds the Jira properties fixture used by the Jira provisioning execution service tests.
+     *
+     * @param enabled whether the capability is enabled
+     * @param provisioningEnabled whether provisioning is enabled
+     * @param dryRun whether the operation is being simulated
+     * @return the Jira properties
+     */
     private JiraProperties properties(boolean enabled, boolean provisioningEnabled, boolean dryRun) {
         return new JiraProperties(
                 enabled,

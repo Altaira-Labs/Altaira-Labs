@@ -16,6 +16,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Exercises provisioning execution payload behavior with JUnit. */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:provisioning_payload_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
         "altaira.commercial.email.enabled=false",
@@ -27,17 +28,32 @@ import static org.assertj.core.api.Assertions.assertThat;
 })
 @ActiveProfiles("test")
 class ProvisioningExecutionPayloadTests {
+    /** Execution operations used by this component. */
     @Autowired private ProvisioningExecutionService executionService;
+    /** Persistence access for lead. */
     @Autowired private LeadRepository leadRepository;
+    /** Persistence access for assessment. */
     @Autowired private LeadAssessmentRepository assessmentRepository;
+    /** Persistence access for plan. */
     @Autowired private ProvisioningPlanRepository planRepository;
+    /** Persistence access for plan item. */
     @Autowired private ProvisioningPlanItemRepository planItemRepository;
+    /** Persistence access for client. */
     @Autowired private ClientRepository clientRepository;
+    /** Persistence access for workspace. */
     @Autowired private ClientWorkspaceRepository workspaceRepository;
+    /** Persistence access for run. */
     @Autowired private ProvisioningRunRepository runRepository;
+    /** Persistence access for step. */
     @Autowired private ProvisioningStepRepository stepRepository;
+    /** Jackson mapper used to read or write JSON. */
     @Autowired private ObjectMapper objectMapper;
 
+    /**
+     * Regression case: prepares concrete provider payloads without external writes and reuses the run.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void preparesConcreteProviderPayloadsWithoutExternalWritesAndReusesTheRun() throws Exception {
         Fixture fixture = fixture();
@@ -102,6 +118,13 @@ class ProvisioningExecutionPayloadTests {
         });
     }
 
+    /**
+     * Checks the tasks produced for the selected service track.
+     *
+     * @param steps ordered steps of the operation
+     * @param track service track within the delivery plan
+     * @param tasks tasks
+     */
     private void assertTrackTasks(List<ProvisioningStepEntity> steps, String track, List<String> tasks) {
         assertThat(steps.stream()
                 .filter(step -> "JIRA".equals(step.getProvider()) && track.equals(step.getTrackKey()))
@@ -109,16 +132,37 @@ class ProvisioningExecutionPayloadTests {
                 .containsExactlyInAnyOrderElementsOf(tasks.stream().map(task -> "Create task: " + task).toList());
     }
 
+    /**
+     * Finds a matching item in the generated provisioning payload.
+     *
+     * @param steps ordered steps of the operation
+     * @param provider integration adapter in use
+     * @param action action being recorded
+     * @return the provisioning step record
+     */
     private ProvisioningStepEntity find(List<ProvisioningStepEntity> steps, String provider, String action) {
         return steps.stream().filter(step -> provider.equals(step.getProvider()) && action.equals(step.getAction()))
                 .findFirst().orElseThrow();
     }
 
+    /**
+     * Builds the external-provider plan item for the payload fixture.
+     *
+     * @param steps ordered steps of the operation
+     * @param provider integration adapter in use
+     * @return the provisioning step record
+     */
     private ProvisioningStepEntity providerItem(List<ProvisioningStepEntity> steps, String provider) {
         return steps.stream().filter(step -> provider.equals(step.getProvider()) && step.getTrackKey() == null)
                 .findFirst().orElseThrow();
     }
 
+    /**
+     * Builds the related planning records required by the execution-payload test. Persists changes through {@code workspaceRepository}.
+     *
+     * @return the fixture
+     * @throws Exception if the operation cannot complete
+     */
     private Fixture fixture() throws Exception {
         LeadEntity lead = new LeadEntity();
         lead.setFullName("Provisioning Payload Owner");
@@ -181,6 +225,16 @@ class ProvisioningExecutionPayloadTests {
         return new Fixture(plan, client, workspace);
     }
 
+    /**
+     * Adds item. Persists changes through {@code planItemRepository}.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param provider integration adapter in use
+     * @param type kind of item or operation
+     * @param name name used to identify the item
+     * @param action action being recorded
+     * @param order position used for ordering
+     */
     private void addItem(ProvisioningPlanEntity plan, String provider, String type, String name, String action, int order) {
         ProvisioningPlanItemEntity item = new ProvisioningPlanItemEntity();
         item.setPlan(plan);
@@ -195,6 +249,12 @@ class ProvisioningExecutionPayloadTests {
         planItemRepository.saveAndFlush(item);
     }
 
+    /**
+     * Supplies a track fixture for the commercial or provisioning scenario.
+     *
+     * @param key key used to identify the item
+     * @return the resulting key–value pairs
+     */
     private Map<String, Object> track(String key) {
         return Map.ofEntries(
                 Map.entry("track", key), Map.entry("route", "TEST_" + key), Map.entry("ruleId", "fixture"),
@@ -205,5 +265,12 @@ class ProvisioningExecutionPayloadTests {
         );
     }
 
+    /**
+     * Groups the fixture data used by provisioning execution payload tests.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param client customer account in scope
+     * @param workspace client workspace in scope
+     */
     private record Fixture(ProvisioningPlanEntity plan, ClientEntity client, ClientWorkspaceEntity workspace) {}
 }

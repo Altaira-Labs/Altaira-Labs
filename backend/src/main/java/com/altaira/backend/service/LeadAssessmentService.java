@@ -25,21 +25,40 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/** Save diagnostic answers and recommend services. Recommendation is advisory until admin approval. */
 @Service
 @Transactional
 public class LeadAssessmentService {
 
+    /** Legacy schema version ({@code 1}). */
     private static final int LEGACY_SCHEMA_VERSION = 1;
+    /** Current schema version ({@code 2}). */
     private static final int CURRENT_SCHEMA_VERSION = 2;
+    /** Max response entries ({@code 50}). */
     private static final int MAX_RESPONSE_ENTRIES = 50;
+    /** Max responses JSON length ({@code 20000}). */
     private static final int MAX_RESPONSES_JSON_LENGTH = 20_000;
 
+    /** Persistence access for assessment. */
     private final LeadAssessmentRepository assessmentRepository;
+    /** Persistence access for lead. */
     private final LeadRepository leadRepository;
+    /** Lead operations used by this component. */
     private final LeadService leadService;
+    /** Schema v2 validator. */
     private final LeadIntakeSchemaV2Validator schemaV2Validator;
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
 
+    /**
+     * Creates the lead assessment service with its injected collaborators.
+     *
+     * @param assessmentRepository persistence access for assessment
+     * @param leadRepository persistence access for lead
+     * @param leadService lead operations used by this component
+     * @param schemaV2Validator schema v2 validator
+     * @param objectMapper Jackson mapper used to read or write JSON
+     */
     public LeadAssessmentService(
             LeadAssessmentRepository assessmentRepository,
             LeadRepository leadRepository,
@@ -54,6 +73,12 @@ public class LeadAssessmentService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Creates admin intake.
+     *
+     * @param request input carrying create admin lead intake
+     * @return the lead intake response
+     */
     public LeadIntakeResponse createAdminIntake(CreateAdminLeadIntakeRequest request) {
         LeadIntakeFormKey formKey = LeadIntakeFormKey.parse(request.getFormKey());
         LeadResponse lead = leadService.createAdminLead(request, formKey.value());
@@ -69,6 +94,12 @@ public class LeadAssessmentService {
         );
     }
 
+    /**
+     * Retrieves assessments.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @return the lead assessment response items
+     */
     @Transactional(readOnly = true)
     public List<LeadAssessmentResponse> getAssessments(UUID leadId) {
         LeadEntity lead = findLead(leadId);
@@ -78,6 +109,14 @@ public class LeadAssessmentService {
                 .toList();
     }
 
+    /**
+     * Saves assessment. Persists changes through {@code assessmentRepository}.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @param rawFormKey key identifying the raw form
+     * @param request input carrying save lead assessment
+     * @return the lead assessment response
+     */
     public LeadAssessmentResponse saveAssessment(
             UUID leadId,
             String rawFormKey,
@@ -107,6 +146,14 @@ public class LeadAssessmentService {
         return map(assessmentRepository.save(entity));
     }
 
+    /**
+     * Resolves schema version.
+     *
+     * @param entity record carrying lead assessment
+     * @param requestedVersion requested version
+     * @return the value produced by this operation
+     * @throws IllegalArgumentException when validation reports “Unsupported assessment schema version”
+     */
     private int resolveSchemaVersion(LeadAssessmentEntity entity, Integer requestedVersion) {
         if (requestedVersion != null) {
             if (requestedVersion < LEGACY_SCHEMA_VERSION || requestedVersion > CURRENT_SCHEMA_VERSION) {
@@ -119,6 +166,13 @@ public class LeadAssessmentService {
                 : Math.max(LEGACY_SCHEMA_VERSION, entity.getSchemaVersion());
     }
 
+    /**
+     * Validates responses.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @return the resulting key–value pairs
+     * @throws IllegalArgumentException when validation reports “Assessment responses are required” or “Assessment contains too many response fields”
+     */
     private Map<String, Object> validateResponses(Map<String, Object> responses) {
         if (responses == null) {
             throw new IllegalArgumentException("Assessment responses are required");
@@ -142,6 +196,13 @@ public class LeadAssessmentService {
         return safeCopy;
     }
 
+    /**
+     * Evaluates the assessment answers to recommend a set of services.
+     *
+     * @param formKey key selecting the discovery questionnaire
+     * @param responses answers supplied in the discovery questionnaire
+     * @return the recommendation
+     */
     private Recommendation recommend(LeadIntakeFormKey formKey, Map<String, Object> responses) {
         if (formKey != LeadIntakeFormKey.GENERAL) {
             return new Recommendation(
@@ -209,6 +270,15 @@ public class LeadAssessmentService {
         return new Recommendation(recommended, summary + ".");
     }
 
+    /**
+     * Adds signal.
+     *
+     * @param scores scores
+     * @param reasons reasons
+     * @param key key used to identify the item
+     * @param weight weight
+     * @param reason explanation of the decision
+     */
     private void addSignal(
             Map<String, Integer> scores,
             Map<String, List<String>> reasons,
@@ -220,11 +290,24 @@ public class LeadAssessmentService {
         reasons.get(key).add(reason);
     }
 
+    /**
+     * Reads a discovery answer as trimmed lowercase text, with an empty string for a missing response.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @param key key used to identify the item
+     * @return the resulting text
+     */
     private String value(Map<String, Object> responses, String key) {
         Object value = responses.get(key);
         return value == null ? "" : String.valueOf(value).trim().toLowerCase();
     }
 
+    /**
+     * Chooses the display label for the recommended service.
+     *
+     * @param key key used to identify the item
+     * @return the resulting text
+     */
     private String serviceLabel(String key) {
         return switch (key) {
             case "web_seo" -> "Web & SEO";
@@ -236,11 +319,24 @@ public class LeadAssessmentService {
         };
     }
 
+    /**
+     * Finds lead. Looks up the referenced record by identifier.
+     *
+     * @param id unique identifier of the record
+     * @return the lead record
+     * @throws com.altaira.backend.exception.LeadNotFoundException if the sales enquiry does not exist
+     */
     private LeadEntity findLead(UUID id) {
         return leadRepository.findById(id)
                 .orElseThrow(() -> new LeadNotFoundException(id));
     }
 
+    /**
+     * Builds {@code LeadAssessmentResponse} from {@code LeadAssessmentEntity}, selecting the fields used by the caller.
+     *
+     * @param entity record carrying lead assessment
+     * @return the lead assessment response
+     */
     private LeadAssessmentResponse map(LeadAssessmentEntity entity) {
         return new LeadAssessmentResponse(
                 entity.getId(),
@@ -256,6 +352,13 @@ public class LeadAssessmentService {
         );
     }
 
+    /**
+     * Writes JSON.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     * @throws IllegalArgumentException when validation reports “Assessment data could not be serialized”
+     */
     private String writeJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -264,6 +367,13 @@ public class LeadAssessmentService {
         }
     }
 
+    /**
+     * Reads map.
+     *
+     * @param json JSON
+     * @return the resulting key–value pairs
+     * @throws IllegalStateException when validation reports “Stored assessment responses are invalid”
+     */
     private Map<String, Object> readMap(String json) {
         try {
             return objectMapper.readValue(json, new TypeReference<>() {});
@@ -272,6 +382,13 @@ public class LeadAssessmentService {
         }
     }
 
+    /**
+     * Reads list.
+     *
+     * @param json JSON
+     * @return the string items
+     * @throws IllegalStateException when validation reports “Stored assessment recommendation is invalid”
+     */
     private List<String> readList(String json) {
         try {
             return objectMapper.readValue(json, new TypeReference<>() {});
@@ -280,5 +397,11 @@ public class LeadAssessmentService {
         }
     }
 
+    /**
+     * Groups the recommendation data used by lead assessment service.
+     *
+     * @param serviceKeys catalogue keys identifying the requested deliveries
+     * @param summary summary
+     */
     private record Recommendation(List<String> serviceKeys, String summary) {}
 }

@@ -7,11 +7,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Exercises GitHub app properties behavior with JUnit. Individual cases include {@code defaultsAllowApplicationToStartWithoutGitHubVariables} and {@code readsGitHubVariablesFromSpringProperties}.
+ */
 class GitHubAppPropertiesTests {
 
+    /** Context runner. */
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withUserConfiguration(GitHubAppProperties.class);
 
+    /** Regression case: defaults allow application to start without GitHub variables. */
     @Test
     void defaultsAllowApplicationToStartWithoutGitHubVariables() {
         contextRunner.run(context -> {
@@ -25,6 +30,7 @@ class GitHubAppPropertiesTests {
         });
     }
 
+    /** Regression case: reads GitHub variables from spring properties. */
     @Test
     void readsGitHubVariablesFromSpringProperties() {
         contextRunner

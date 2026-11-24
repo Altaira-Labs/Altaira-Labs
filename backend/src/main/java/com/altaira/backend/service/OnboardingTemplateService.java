@@ -9,9 +9,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/** Create service-specific onboarding checklists. Only contracted tracks receive task templates. */
 @Service
 public class OnboardingTemplateService {
 
+    /**
+     * Returns the onboarding task templates shared across services.
+     *
+     * @param sectorType sector used to select the intake rules
+     * @return the task template items
+     */
     public List<TaskTemplate> generalTemplates(SectorType sectorType) {
         List<TaskTemplate> templates = new ArrayList<>();
         templates.add(new TaskTemplate(
@@ -52,6 +59,13 @@ public class OnboardingTemplateService {
         return templates;
     }
 
+    /**
+     * Returns the additional onboarding tasks required by the selected service.
+     *
+     * @param clientService client operations used by this component
+     * @param sectorType sector used to select the intake rules
+     * @return the task template items
+     */
     public List<TaskTemplate> serviceTemplates(ClientServiceEntity clientService, SectorType sectorType) {
         String serviceKey = serviceKey(clientService);
         List<TaskTemplate> templates = new ArrayList<>();
@@ -134,6 +148,12 @@ public class OnboardingTemplateService {
         return templates;
     }
 
+    /**
+     * Translates a service assignment into its onboarding template key, using the general template when service information is absent. Uses locale-independent case normalization.
+     *
+     * @param clientService client operations used by this component
+     * @return the resulting text
+     */
     public String serviceKey(ClientServiceEntity clientService) {
         if (clientService == null || clientService.getService() == null || clientService.getService().getName() == null) {
             return "general";
@@ -164,6 +184,13 @@ public class OnboardingTemplateService {
         return normalized.replaceAll("[^a-z0-9]+", "_").replaceAll("^_+|_+$", "");
     }
 
+    /**
+     * Adds booking templates.
+     *
+     * @param templates templates
+     * @param serviceKey stable key for the service
+     * @param sectorType sector used to select the intake rules
+     */
     private void addBookingTemplates(List<TaskTemplate> templates, String serviceKey, SectorType sectorType) {
         templates.add(new TaskTemplate(
                 "booking-contract-signature",
@@ -222,6 +249,13 @@ public class OnboardingTemplateService {
         ));
     }
 
+    /**
+     * Adds CRM templates.
+     *
+     * @param templates templates
+     * @param serviceKey stable key for the service
+     * @param sectorType sector used to select the intake rules
+     */
     private void addCrmTemplates(List<TaskTemplate> templates, String serviceKey, SectorType sectorType) {
         templates.add(new TaskTemplate(
                 "crm-data-processing-signature",
@@ -280,6 +314,13 @@ public class OnboardingTemplateService {
         ));
     }
 
+    /**
+     * Adds automation templates.
+     *
+     * @param templates templates
+     * @param serviceKey stable key for the service
+     * @param sectorType sector used to select the intake rules
+     */
     private void addAutomationTemplates(List<TaskTemplate> templates, String serviceKey, SectorType sectorType) {
         templates.add(new TaskTemplate(
                 "automation-gdpr-signature",
@@ -327,6 +368,13 @@ public class OnboardingTemplateService {
         ));
     }
 
+    /**
+     * Adds dashboard templates.
+     *
+     * @param templates templates
+     * @param serviceKey stable key for the service
+     * @param sectorType sector used to select the intake rules
+     */
     private void addDashboardTemplates(List<TaskTemplate> templates, String serviceKey, SectorType sectorType) {
         templates.add(new TaskTemplate(
                 "dashboard-nda-signature",
@@ -385,6 +433,12 @@ public class OnboardingTemplateService {
         ));
     }
 
+    /**
+     * Selects the template used to collect sector-specific onboarding information.
+     *
+     * @param sectorType sector used to select the intake rules
+     * @return the task template
+     */
     private TaskTemplate sectorTemplate(SectorType sectorType) {
         return switch (sectorType) {
             case CLINICS -> new TaskTemplate(
@@ -434,6 +488,19 @@ public class OnboardingTemplateService {
         };
     }
 
+    /**
+     * Groups the task template data used by onboarding template service.
+     *
+     * @param taskKey key identifying the task
+     * @param title short heading shown to a reader
+     * @param description human-readable description
+     * @param taskType task type
+     * @param serviceKey stable key for the service
+     * @param sectorType sector used to select the intake rules
+     * @param required whether the item is required
+     * @param critical critical
+     * @param sortOrder position used when displaying the items
+     */
     public record TaskTemplate(
             String taskKey,
             String title,

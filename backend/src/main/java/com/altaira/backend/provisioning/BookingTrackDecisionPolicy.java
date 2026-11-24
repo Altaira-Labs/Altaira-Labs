@@ -6,19 +6,37 @@ import com.altaira.backend.model.ProvisioningRoute;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Selects tools, delivery work and manual steps for the booking service track. */
 public final class BookingTrackDecisionPolicy implements TrackDecisionPolicy {
 
+    /** Tools included in the delivery decision. */
     private final ProvisioningToolCatalog tools;
 
+    /**
+     * Constructs {@code BookingTrackDecisionPolicy} using the supplied tools.
+     *
+     * @param tools tools included in the delivery decision
+     */
     public BookingTrackDecisionPolicy(ProvisioningToolCatalog tools) {
         this.tools = tools;
     }
 
+    /**
+     * Identifies the track this policy handles for the booking track.
+     *
+     * @return the provisioning track
+     */
     @Override
     public ProvisioningTrack track() {
         return ProvisioningTrack.BOOKING;
     }
 
+    /**
+     * Determines whether supports applies.
+     *
+     * @param context context carrying provisioning decision
+     * @return true when the check succeeds
+     */
     @Override
     public boolean supports(ProvisioningDecisionContext context) {
         return context.recommends(track())
@@ -26,6 +44,12 @@ public final class BookingTrackDecisionPolicy implements TrackDecisionPolicy {
                 || context.requirements().has(RequirementSet.BOOKING);
     }
 
+    /**
+     * Applies the booking track rules to the supplied discovery context and returns a plan for that track.
+     *
+     * @param context context carrying provisioning decision
+     * @return the track decision
+     */
     @Override
     public TrackDecision decide(ProvisioningDecisionContext context) {
         boolean custom = !context.isGeneral()
@@ -66,6 +90,13 @@ public final class BookingTrackDecisionPolicy implements TrackDecisionPolicy {
         );
     }
 
+    /**
+     * Chooses which tools to include or exclude for the proposed work for the booking track.
+     *
+     * @param context context carrying provisioning decision
+     * @param route delivery route selected by the planning policy
+     * @return the tool decision items
+     */
     private List<ProvisioningDecision.ToolDecision> selectedTools(
             ProvisioningDecisionContext context,
             ProvisioningRoute route
@@ -112,6 +143,12 @@ public final class BookingTrackDecisionPolicy implements TrackDecisionPolicy {
         return deduplicate(result);
     }
 
+    /**
+     * Removes repeated entries while assembling the track decision.
+     *
+     * @param decisions decisions
+     * @return the tool decision items
+     */
     private List<ProvisioningDecision.ToolDecision> deduplicate(List<ProvisioningDecision.ToolDecision> decisions) {
         List<String> seen = new ArrayList<>();
         return decisions.stream().filter(decision -> {
@@ -121,6 +158,13 @@ public final class BookingTrackDecisionPolicy implements TrackDecisionPolicy {
         }).toList();
     }
 
+    /**
+     * Collects the work that still requires a person for the booking track.
+     *
+     * @param context context carrying provisioning decision
+     * @param custom custom
+     * @return the manual step decision items
+     */
     private List<ProvisioningDecision.ManualStepDecision> manualSteps(
             ProvisioningDecisionContext context,
             boolean custom
@@ -178,6 +222,12 @@ public final class BookingTrackDecisionPolicy implements TrackDecisionPolicy {
         return result;
     }
 
+    /**
+     * Appends discovery reviews.
+     *
+     * @param result result produced by the operation
+     * @param context context carrying provisioning decision
+     */
     private void appendDiscoveryReviews(
             List<ProvisioningDecision.ManualStepDecision> result,
             ProvisioningDecisionContext context
@@ -193,6 +243,13 @@ public final class BookingTrackDecisionPolicy implements TrackDecisionPolicy {
         }
     }
 
+    /**
+     * Describes the deliverables to include in the plan for the booking track.
+     *
+     * @param context context carrying provisioning decision
+     * @param selected selected
+     * @return the plan item decision items
+     */
     private List<ProvisioningDecision.PlanItemDecision> planItems(
             ProvisioningDecisionContext context,
             List<ProvisioningDecision.ToolDecision> selected

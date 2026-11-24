@@ -46,23 +46,42 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * Exercises GitHub provisioning execution service behavior with JUnit. Individual cases include {@code requiresExactConfirmationBeforeReadingOrWritingPlanData} and {@code persistsSafeFailureAndAllowsControlledRetry}.
+ */
 class GitHubProvisioningExecutionServiceTests {
 
+    /** Persistence access for plan. */
     private final ProvisioningPlanRepository planRepository = mock(ProvisioningPlanRepository.class);
+    /** Persistence access for plan item. */
     private final ProvisioningPlanItemRepository planItemRepository = mock(ProvisioningPlanItemRepository.class);
+    /** Persistence access for commercial flow. */
     private final CommercialFlowRepository commercialFlowRepository = mock(CommercialFlowRepository.class);
+    /** Persistence access for run. */
     private final ProvisioningRunRepository runRepository = mock(ProvisioningRunRepository.class);
+    /** Persistence access for step. */
     private final ProvisioningStepRepository stepRepository = mock(ProvisioningStepRepository.class);
+    /** Persistence access for external resource. */
     private final ProvisioningExternalResourceRepository externalResourceRepository = mock(ProvisioningExternalResourceRepository.class);
+    /** Repository provisioner. */
     private final GitHubRepositoryProvisioner repositoryProvisioner = mock(GitHubRepositoryProvisioner.class);
 
+    /** Identifier of the saved provisioning plan. */
     private final UUID planId = UUID.fromString("ce35f5af-d0bf-4f15-867f-3795f4932a0e");
+    /** Run state. */
     private final AtomicReference<ProvisioningRunEntity> runState = new AtomicReference<>();
+    /** Step state. */
     private final AtomicReference<ProvisioningStepEntity> stepState = new AtomicReference<>();
+    /** Resources. */
     private final List<ProvisioningExternalResourceEntity> resources = new ArrayList<>();
+    /** Proposed or saved delivery plan. */
     private ProvisioningPlanEntity plan;
+    /** Flow. */
     private CommercialFlowEntity flow;
 
+    /**
+     * Sets up. Persists changes through {@code externalResourceRepository}. Copies the list before returning it.
+     */
     @BeforeEach
     void setUp() {
         plan = approvedPlan();
@@ -113,6 +132,7 @@ class GitHubProvisioningExecutionServiceTests {
         });
     }
 
+    /** Regression case: requires exact confirmation before reading or writing plan data. */
     @Test
     void requiresExactConfirmationBeforeReadingOrWritingPlanData() {
         GitHubProvisioningExecutionService service = service(liveProperties());
@@ -128,6 +148,7 @@ class GitHubProvisioningExecutionServiceTests {
         verify(repositoryProvisioner, never()).ensurePrivateRepository(anyString(), anyString());
     }
 
+    /** Regression case: default dry run gate blocks before persisting an execution. */
     @Test
     void defaultDryRunGateBlocksBeforePersistingAnExecution() {
         GitHubProvisioningExecutionService service = service(properties(true, true, true));
@@ -142,6 +163,7 @@ class GitHubProvisioningExecutionServiceTests {
         verify(repositoryProvisioner, never()).ensurePrivateRepository(anyString(), anyString());
     }
 
+    /** Regression case: creates private repository once and reuses persisted result on repeat. */
     @Test
     void createsPrivateRepositoryOnceAndReusesPersistedResultOnRepeat() {
         when(repositoryProvisioner.ensurePrivateRepository(anyString(), anyString()))
@@ -167,6 +189,7 @@ class GitHubProvisioningExecutionServiceTests {
         );
     }
 
+    /** Regression case: persists safe failure and allows controlled retry. */
     @Test
     void persistsSafeFailureAndAllowsControlledRetry() {
         when(repositoryProvisioner.ensurePrivateRepository(anyString(), anyString()))
@@ -187,6 +210,12 @@ class GitHubProvisioningExecutionServiceTests {
                 .ensurePrivateRepository(anyString(), anyString());
     }
 
+    /**
+     * Builds the GitHub provisioning execution service fixture used by the GitHub provisioning execution service tests.
+     *
+     * @param properties properties
+     * @return the GitHub provisioning execution service
+     */
     private GitHubProvisioningExecutionService service(GitHubAppProperties properties) {
         return new GitHubProvisioningExecutionService(
                 planRepository,
@@ -201,6 +230,11 @@ class GitHubProvisioningExecutionServiceTests {
         );
     }
 
+    /**
+     * Builds the provisioning plan entity fixture used by the GitHub provisioning execution service tests.
+     *
+     * @return the provisioning plan record
+     */
     private ProvisioningPlanEntity approvedPlan() {
         ProvisioningPlanEntity entity = new ProvisioningPlanEntity();
         entity.setId(planId);
@@ -209,6 +243,12 @@ class GitHubProvisioningExecutionServiceTests {
         return entity;
     }
 
+    /**
+     * Builds the commercial flow entity fixture used by the GitHub provisioning execution service tests.
+     *
+     * @param entity record carrying provisioning plan
+     * @return the commercial flow record
+     */
     private CommercialFlowEntity activeFlow(ProvisioningPlanEntity entity) {
         ClientEntity client = new ClientEntity();
         client.setId(UUID.fromString("329076bf-c206-466c-a586-a31f838b7317"));
@@ -231,6 +271,12 @@ class GitHubProvisioningExecutionServiceTests {
         return commercialFlow;
     }
 
+    /**
+     * Creates the approved plan item consumed by the GitHub execution tests.
+     *
+     * @param entity record carrying provisioning plan
+     * @return the provisioning plan item record
+     */
     private ProvisioningPlanItemEntity githubPlanItem(ProvisioningPlanEntity entity) {
         ProvisioningPlanItemEntity item = new ProvisioningPlanItemEntity();
         item.setPlan(entity);
@@ -242,10 +288,20 @@ class GitHubProvisioningExecutionServiceTests {
         return item;
     }
 
+    /**
+     * Builds the execute GitHub repository request fixture used by the GitHub provisioning execution service tests.
+     *
+     * @return the execute GitHub repository request
+     */
     private ExecuteGitHubRepositoryRequest confirmedRequest() {
         return new ExecuteGitHubRepositoryRequest(GitHubProvisioningExecutionService.CONFIRMATION);
     }
 
+    /**
+     * Builds the GitHub repository provisioning result fixture used by the GitHub provisioning execution service tests.
+     *
+     * @return the GitHub repository provisioning result
+     */
     private GitHubRepositoryProvisioningResult createdResult() {
         return new GitHubRepositoryProvisioningResult(
                 true,
@@ -257,10 +313,23 @@ class GitHubProvisioningExecutionServiceTests {
         );
     }
 
+    /**
+     * Enables the configuration needed to exercise the local integration double.
+     *
+     * @return the GitHub app properties
+     */
     private GitHubAppProperties liveProperties() {
         return properties(true, true, false);
     }
 
+    /**
+     * Builds the GitHub app properties fixture used by the GitHub provisioning execution service tests.
+     *
+     * @param enabled whether the capability is enabled
+     * @param provisioningEnabled whether provisioning is enabled
+     * @param dryRun whether the operation is being simulated
+     * @return the GitHub app properties
+     */
     private GitHubAppProperties properties(boolean enabled, boolean provisioningEnabled, boolean dryRun) {
         return new GitHubAppProperties(
                 enabled,

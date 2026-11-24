@@ -6,19 +6,37 @@ import com.altaira.backend.model.ProvisioningRoute;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Selects tools, delivery work and manual steps for the web service track. */
 public final class WebTrackDecisionPolicy implements TrackDecisionPolicy {
 
+    /** Tools included in the delivery decision. */
     private final ProvisioningToolCatalog tools;
 
+    /**
+     * Constructs {@code WebTrackDecisionPolicy} using the supplied tools.
+     *
+     * @param tools tools included in the delivery decision
+     */
     public WebTrackDecisionPolicy(ProvisioningToolCatalog tools) {
         this.tools = tools;
     }
 
+    /**
+     * Identifies the track this policy handles for the web track.
+     *
+     * @return the provisioning track
+     */
     @Override
     public ProvisioningTrack track() {
         return ProvisioningTrack.WEB;
     }
 
+    /**
+     * Determines whether supports applies.
+     *
+     * @param context context carrying provisioning decision
+     * @return true when the check succeeds
+     */
     @Override
     public boolean supports(ProvisioningDecisionContext context) {
         return context.recommends(track())
@@ -27,6 +45,12 @@ public final class WebTrackDecisionPolicy implements TrackDecisionPolicy {
                 || context.requirements().has(RequirementSet.CMS);
     }
 
+    /**
+     * Applies the web track rules to the supplied discovery context and returns a plan for that track.
+     *
+     * @param context context carrying provisioning decision
+     * @return the track decision
+     */
     @Override
     public TrackDecision decide(ProvisioningDecisionContext context) {
         ProvisioningRoute route = route(context);
@@ -52,6 +76,12 @@ public final class WebTrackDecisionPolicy implements TrackDecisionPolicy {
         );
     }
 
+    /**
+     * Selects the delivery route from the discovery inputs for the web track.
+     *
+     * @param context context carrying provisioning decision
+     * @return the provisioning route
+     */
     private ProvisioningRoute route(ProvisioningDecisionContext context) {
         if (context.equalsAny("solutionShape", "ecommerce", "online_store")) {
             boolean platformFit = context.yes("contentManagement")
@@ -73,6 +103,13 @@ public final class WebTrackDecisionPolicy implements TrackDecisionPolicy {
         return ProvisioningRoute.PROVISION_WEB_STATIC;
     }
 
+    /**
+     * Chooses which tools to include or exclude for the proposed work for the web track.
+     *
+     * @param context context carrying provisioning decision
+     * @param route delivery route selected by the planning policy
+     * @return the tool decision items
+     */
     private List<ProvisioningDecision.ToolDecision> selectedTools(
             ProvisioningDecisionContext context,
             ProvisioningRoute route
@@ -125,6 +162,12 @@ public final class WebTrackDecisionPolicy implements TrackDecisionPolicy {
         return result;
     }
 
+    /**
+     * Adds exclusions.
+     *
+     * @param result result produced by the operation
+     * @param route delivery route selected by the planning policy
+     */
     private void addExclusions(List<ProvisioningDecision.ToolDecision> result, ProvisioningRoute route) {
         if (route == ProvisioningRoute.PROVISION_WEB_STATIC || route == ProvisioningRoute.PROVISION_WEB_CMS) {
             result.add(tools.exclude("RENDER", "No custom backend is required."));
@@ -145,6 +188,13 @@ public final class WebTrackDecisionPolicy implements TrackDecisionPolicy {
         }
     }
 
+    /**
+     * Collects the work that still requires a person for the web track.
+     *
+     * @param context context carrying provisioning decision
+     * @param route delivery route selected by the planning policy
+     * @return the manual step decision items
+     */
     private List<ProvisioningDecision.ManualStepDecision> manualSteps(
             ProvisioningDecisionContext context,
             ProvisioningRoute route
@@ -223,6 +273,14 @@ public final class WebTrackDecisionPolicy implements TrackDecisionPolicy {
         return result;
     }
 
+    /**
+     * Describes the deliverables to include in the plan for the web track.
+     *
+     * @param context context carrying provisioning decision
+     * @param route delivery route selected by the planning policy
+     * @param selected selected
+     * @return the plan item decision items
+     */
     private List<ProvisioningDecision.PlanItemDecision> planItems(
             ProvisioningDecisionContext context,
             ProvisioningRoute route,
@@ -234,6 +292,13 @@ public final class WebTrackDecisionPolicy implements TrackDecisionPolicy {
                 .toList();
     }
 
+    /**
+     * Chooses the degree of automation for the selected route for the web track.
+     *
+     * @param context context carrying provisioning decision
+     * @param route delivery route selected by the planning policy
+     * @return the automation level
+     */
     private AutomationLevel automationLevel(ProvisioningDecisionContext context, ProvisioningRoute route) {
         if (route == ProvisioningRoute.PROVISION_WEB_CUSTOM || route == ProvisioningRoute.PROVISION_ECOMMERCE_CUSTOM) {
             return AutomationLevel.A3;
@@ -247,14 +312,33 @@ public final class WebTrackDecisionPolicy implements TrackDecisionPolicy {
         return AutomationLevel.A2;
     }
 
+    /**
+     * Identifies the rule that explains the selected route for the web track.
+     *
+     * @param route delivery route selected by the planning policy
+     * @return the resulting text
+     */
     private String ruleId(ProvisioningRoute route) {
         return "WEB-" + route.name().replace("PROVISION_", "");
     }
 
+    /**
+     * Lists the observations from discovery that support the rule choice for the web track.
+     *
+     * @param context context carrying provisioning decision
+     * @param route delivery route selected by the planning policy
+     * @return the string items
+     */
     private List<String> matchedSignals(ProvisioningDecisionContext context, ProvisioningRoute route) {
         return List.of("form=" + context.formKey(), "route=" + route.name(), "cms=" + context.requirements().has(RequirementSet.CMS));
     }
 
+    /**
+     * Builds the explanation shown alongside the selected route for the web track.
+     *
+     * @param route delivery route selected by the planning policy
+     * @return the resulting text
+     */
     private String reason(ProvisioningRoute route) {
         return switch (route) {
             case PROVISION_WEB_STATIC -> "A static delivery covers the requested public presence without custom persistence.";
@@ -266,6 +350,12 @@ public final class WebTrackDecisionPolicy implements TrackDecisionPolicy {
         };
     }
 
+    /**
+     * Lists concerns that must be reviewed before delivery for the web track.
+     *
+     * @param route delivery route selected by the planning policy
+     * @return the string items
+     */
     private List<String> risks(ProvisioningRoute route) {
         return switch (route) {
             case PROVISION_WEB_STATIC -> List.of(

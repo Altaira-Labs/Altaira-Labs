@@ -13,14 +13,28 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.util.UUID;
 
+/** Prepares Stripe test-mode checkout sessions or mock checkout results, depending on configuration. */
 @Component
 public class StripeCheckoutGateway {
+    /** Properties. */
     private final CommercialStripeProperties properties;
 
+    /**
+     * Constructs {@code StripeCheckoutGateway} using the supplied properties.
+     *
+     * @param properties properties
+     */
     public StripeCheckoutGateway(CommercialStripeProperties properties) {
         this.properties = properties;
     }
 
+    /**
+     * Creates checkout.
+     *
+     * @param command command
+     * @return the checkout result
+     * @throws IllegalStateException when validation reports “Stripe test checkout could not be created”
+     */
     public CheckoutResult createCheckout(CheckoutCommand command) {
         if (properties.isMock()) {
             String id = "mock_cs_" + UUID.randomUUID().toString().replace("-", "");
@@ -61,6 +75,15 @@ public class StripeCheckoutGateway {
         }
     }
 
+    /**
+     * Verifies webhook.
+     *
+     * @param payload data passed across this boundary
+     * @param signature signature accompanying the event
+     * @return the event
+     * @throws IllegalArgumentException when validation reports “Invalid Stripe webhook signature”
+     * @throws IllegalStateException when validation reports “Stripe webhook verification is not configured”
+     */
     public Event verifyWebhook(String payload, String signature) {
         if (properties.webhookSecret().isBlank()) {
             throw new IllegalStateException("Stripe webhook verification is not configured");
@@ -72,8 +95,24 @@ public class StripeCheckoutGateway {
         }
     }
 
+    /**
+     * Returns the properties for this Stripe checkout gateway.
+     *
+     * @return properties
+     */
     public CommercialStripeProperties properties() { return properties; }
 
+    /**
+     * Groups the checkout command data used by Stripe checkout gateway.
+     *
+     * @param flowId identifier of the flow
+     * @param planId identifier of the saved provisioning plan
+     * @param amountMinor checkout amount in the currency’s smallest unit
+     * @param currency currency code for the payment
+     * @param customerEmail customer email
+     * @param description human-readable description
+     * @param idempotencyKey key used to recognize a repeated operation
+     */
     public record CheckoutCommand(
             UUID flowId,
             UUID planId,
@@ -84,6 +123,15 @@ public class StripeCheckoutGateway {
             String idempotencyKey
     ) {}
 
+    /**
+     * Outcome of checkout, shared with the component that requested the operation.
+     *
+     * @param providerSessionId identifier of the provider session
+     * @param checkoutUrl URL for checkout
+     * @param paymentIntentId identifier of the payment intent
+     * @param expiresAt time after which this item can no longer be used
+     * @param providerMode provider mode
+     */
     public record CheckoutResult(
             String providerSessionId,
             String checkoutUrl,

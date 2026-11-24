@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/** Registers the initial set of services that consultants can assign to clients. */
 @Component
 @ConditionalOnProperty(
         name = "altaira.service-catalog.seed.enabled",
@@ -17,12 +18,19 @@ import java.util.List;
 )
 public class ServiceCatalogSeeder {
 
+    /** Persistence access for service. */
     private final ServiceRepository serviceRepository;
 
+    /**
+     * Creates the service catalog seeder with its injected collaborators.
+     *
+     * @param serviceRepository persistence access for service
+     */
     public ServiceCatalogSeeder(ServiceRepository serviceRepository) {
         this.serviceRepository = serviceRepository;
     }
 
+    /** Performs the seed services operation. Persists changes through {@code serviceRepository}. */
     @EventListener(ApplicationReadyEvent.class)
     public void seedServices() {
         List<SeedService> services = List.of(
@@ -47,5 +55,12 @@ public class ServiceCatalogSeeder {
         }
     }
 
+    /**
+     * Coordinates seed operations in the backend.
+     *
+     * @param name name used to identify the item
+     * @param category category
+     * @param description human-readable description
+     */
     private record SeedService(String name, String category, String description) {}
 }

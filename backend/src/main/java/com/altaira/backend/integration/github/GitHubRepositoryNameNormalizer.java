@@ -3,10 +3,18 @@ package com.altaira.backend.integration.github;
 import java.text.Normalizer;
 import java.util.Locale;
 
+/** Converts a proposed repository name into a format accepted by the GitHub provisioning adapter. */
 public final class GitHubRepositoryNameNormalizer {
 
+    /** Constructs {@code GitHubRepositoryNameNormalizer} with its default state. */
     private GitHubRepositoryNameNormalizer() {}
 
+    /**
+     * Strips accents, lowercases the name and replaces unsupported repository-name characters before validating the result. Uses locale-independent case normalization.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     public static String normalize(String value) {
         String normalized = Normalizer.normalize(value == null ? "" : value, Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "")

@@ -20,8 +20,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Exercises GitHub integration status service behavior with JUnit. Individual cases include {@code disabledStatusDoesNotCallGitHub} and {@code enabledStatusUsesGitHubAppFlowAgainstMockApi}.
+ */
 class GitHubIntegrationStatusServiceTests {
 
+    /** Regression case: disabled status does not call GitHub. */
     @Test
     void disabledStatusDoesNotCallGitHub() {
         GitHubAppProperties properties = new GitHubAppProperties(
@@ -50,6 +54,7 @@ class GitHubIntegrationStatusServiceTests {
         assertTrue(status.errors().isEmpty());
     }
 
+    /** Regression case: invalid private key base64 returns safe status error without calling GitHub. */
     @Test
     void invalidPrivateKeyBase64ReturnsSafeStatusErrorWithoutCallingGitHub() {
         GitHubAppProperties properties = new GitHubAppProperties(
@@ -79,6 +84,11 @@ class GitHubIntegrationStatusServiceTests {
         assertEquals(List.of("GitHub App private key could not be decoded. Check GITHUB_APP_PRIVATE_KEY_BASE64."), status.errors());
     }
 
+    /**
+     * Regression case: enabled status uses GitHub app flow against mock API.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void enabledStatusUsesGitHubAppFlowAgainstMockApi() throws Exception {
         AtomicInteger requestCount = new AtomicInteger();
@@ -175,22 +185,45 @@ class GitHubIntegrationStatusServiceTests {
         }
     }
 
+    /** Implements throwing GitHub API client behavior for the GitHub package. */
     private static class ThrowingGitHubApiClient extends GitHubApiClient {
+        /** Constructs {@code ThrowingGitHubApiClient} with its default state. */
         ThrowingGitHubApiClient() {
             super(new ObjectMapper());
         }
 
+        /**
+         * Fails the test immediately if the adapter attempts an outbound GET call.
+         *
+         * @param uri uri
+         * @param bearerToken credential for bearer
+         * @return the JSON node
+         */
         @Override
         public JsonNode get(URI uri, String bearerToken) {
             throw new AssertionError("GitHub API must not be called in this test");
         }
 
+        /**
+         * Fails the test immediately if the adapter attempts an outbound POST call.
+         *
+         * @param uri uri
+         * @param bearerToken credential for bearer
+         * @param body request or response content
+         * @return the JSON node
+         */
         @Override
         public JsonNode post(URI uri, String bearerToken, JsonNode body) {
             throw new AssertionError("GitHub API must not be called in this test");
         }
     }
 
+    /**
+     * Provides an encoded fixture key for the local test integration.
+     *
+     * @return the resulting text
+     * @throws Exception if the operation cannot complete
+     */
     private static String testPrivateKeyBase64() throws Exception {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);
@@ -201,6 +234,14 @@ class GitHubIntegrationStatusServiceTests {
         return Base64.getEncoder().encodeToString(pem.getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * Sends JSON.
+     *
+     * @param exchange exchange
+     * @param status current state in the workflow
+     * @param json JSON
+     * @throws IOException if the underlying input or output cannot be completed
+     */
     private static void sendJson(HttpExchange exchange, int status, String json) throws IOException {
         byte[] body = json.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().add("Content-Type", "application/json");

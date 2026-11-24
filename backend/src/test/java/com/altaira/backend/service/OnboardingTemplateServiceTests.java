@@ -15,10 +15,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Exercises onboarding template service behavior with JUnit. Individual cases include {@code createsWebSeoOnboardingTasksWithLegalAndBrandInputs} and {@code createsDashboardOnboardingTasksForNdaRolesProtocolsAndMigration}.
+ */
 class OnboardingTemplateServiceTests {
 
+    /** Onboarding template operations used by this component. */
     private final OnboardingTemplateService onboardingTemplateService = new OnboardingTemplateService();
 
+    /** Regression case: creates web seo onboarding tasks with legal and brand inputs. */
     @Test
     void createsWebSeoOnboardingTasksWithLegalAndBrandInputs() {
         Map<String, OnboardingTemplateService.TaskTemplate> tasks = templatesFor("Professional Websites and SEO");
@@ -31,6 +36,7 @@ class OnboardingTemplateServiceTests {
         assertTrue(tasks.get("web-domain-access-context").description().contains("Do not submit passwords"));
     }
 
+    /** Regression case: creates booking onboarding tasks for rules policies and integrations. */
     @Test
     void createsBookingOnboardingTasksForRulesPoliciesAndIntegrations() {
         Map<String, OnboardingTemplateService.TaskTemplate> tasks = templatesFor("Booking System");
@@ -42,6 +48,7 @@ class OnboardingTemplateServiceTests {
         assertFalse(tasks.get("booking-integrations").required());
     }
 
+    /** Regression case: creates CRM onboarding tasks for data processing catalogue and migration. */
     @Test
     void createsCrmOnboardingTasksForDataProcessingCatalogueAndMigration() {
         Map<String, OnboardingTemplateService.TaskTemplate> tasks = templatesFor("CRM Lead Management Systems");
@@ -54,6 +61,7 @@ class OnboardingTemplateServiceTests {
         assertEquals(OnboardingTaskType.FILE_UPLOAD, tasks.get("crm-contact-import").taskType());
     }
 
+    /** Regression case: creates automation onboarding tasks for channels tone and recipes. */
     @Test
     void createsAutomationOnboardingTasksForChannelsToneAndRecipes() {
         Map<String, OnboardingTemplateService.TaskTemplate> tasks = templatesFor("Workflow Automation");
@@ -64,6 +72,7 @@ class OnboardingTemplateServiceTests {
         assertEquals(OnboardingTaskType.PREFERENCES_FORM, tasks.get("automation-goals-recipes").taskType());
     }
 
+    /** Regression case: creates dashboard onboarding tasks for nda roles protocols and migration. */
     @Test
     void createsDashboardOnboardingTasksForNdaRolesProtocolsAndMigration() {
         Map<String, OnboardingTemplateService.TaskTemplate> tasks = templatesFor("Management Dashboard");
@@ -75,6 +84,12 @@ class OnboardingTemplateServiceTests {
         assertEquals(OnboardingTaskType.PREFERENCES_FORM, tasks.get("dashboard-kpis").taskType());
     }
 
+    /**
+     * Returns the task templates produced for the supplied test services.
+     *
+     * @param serviceName service name
+     * @return the resulting key–value pairs
+     */
     private Map<String, OnboardingTemplateService.TaskTemplate> templatesFor(String serviceName) {
         ClientServiceEntity clientService = new ClientServiceEntity();
         ServiceEntity service = new ServiceEntity();
@@ -92,6 +107,12 @@ class OnboardingTemplateServiceTests {
         ));
     }
 
+    /**
+     * Checks the contract-signature task defined by the selected template.
+     *
+     * @param task task
+     * @param expectedServiceKey key identifying the expected service
+     */
     private void assertSignatureTask(OnboardingTemplateService.TaskTemplate task, String expectedServiceKey) {
         assertEquals(OnboardingTaskType.SIGNATURE, task.taskType());
         assertEquals(expectedServiceKey, task.serviceKey());
@@ -99,6 +120,12 @@ class OnboardingTemplateServiceTests {
         assertTrue(task.critical());
     }
 
+    /**
+     * Checks the required form in the selected onboarding template.
+     *
+     * @param task task
+     * @param expectedServiceKey key identifying the expected service
+     */
     private void assertCriticalForm(OnboardingTemplateService.TaskTemplate task, String expectedServiceKey) {
         assertEquals(OnboardingTaskType.PREFERENCES_FORM, task.taskType());
         assertEquals(expectedServiceKey, task.serviceKey());

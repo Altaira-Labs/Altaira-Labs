@@ -33,6 +33,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Exercises commercial notification retry behavior with JUnit. */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:commercial_notification_retry;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
         "altaira.commercial.email.enabled=true",
@@ -46,17 +47,31 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 @Transactional
 class CommercialNotificationRetryTests {
+    /** Request bodies used by commercial notification retry tests. */
     private static final List<String> REQUEST_BODIES = new CopyOnWriteArrayList<>();
+    /** Resend stub. */
     private static HttpServer resendStub;
 
+    /** Commercial flow operations used by this component. */
     @Autowired private CommercialFlowService commercialFlowService;
+    /** Persistence access for lead. */
     @Autowired private LeadRepository leadRepository;
+    /** Persistence access for assessment. */
     @Autowired private LeadAssessmentRepository assessmentRepository;
+    /** Persistence access for plan. */
     @Autowired private ProvisioningPlanRepository planRepository;
+    /** Persistence access for flow. */
     @Autowired private CommercialFlowRepository flowRepository;
+    /** Persistence access for session. */
     @Autowired private CommercialPaymentSessionRepository sessionRepository;
+    /** Persistence access for email log. */
     @Autowired private CommercialEmailLogRepository emailLogRepository;
 
+    /**
+     * Starts resend stub.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @BeforeAll
     static void startResendStub() throws Exception {
         resendStub = HttpServer.create(new InetSocketAddress(0), 0);
@@ -71,17 +86,24 @@ class CommercialNotificationRetryTests {
         resendStub.start();
     }
 
+    /** Performs the stop resend stub operation. */
     @AfterAll
     static void stopResendStub() {
         resendStub.stop(0);
     }
 
+    /**
+     * Configures the test notification provider for the local retry scenario.
+     *
+     * @param registry registry
+     */
     @DynamicPropertySource
     static void resendProperties(DynamicPropertyRegistry registry) {
         registry.add("altaira.commercial.email.resend.api-url",
                 () -> "http://localhost:" + resendStub.getAddress().getPort() + "/emails");
     }
 
+    /** Regression case: retries eligible emails once and exposes delivery audit. */
     @Test
     void retriesEligibleEmailsOnceAndExposesDeliveryAudit() {
         REQUEST_BODIES.clear();
@@ -104,6 +126,11 @@ class CommercialNotificationRetryTests {
         assertThat(secondRetry.safeMessage()).contains("No pending commercial email");
     }
 
+    /**
+     * Constructs a commercial flow whose payment has already been confirmed. Persists changes through {@code sessionRepository}.
+     *
+     * @return the provisioning plan record
+     */
     private ProvisioningPlanEntity confirmedFlowFixture() {
         String suffix = UUID.randomUUID().toString();
         LeadEntity lead = new LeadEntity();

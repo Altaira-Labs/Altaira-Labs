@@ -31,35 +31,82 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+/** Resend/SMTP contact notification. Secrets are never logged; provider failure is classified safely. */
 @Service
 public class LeadNotificationService {
 
+    /** Logger for this component. */
     private static final Logger logger = LoggerFactory.getLogger(LeadNotificationService.class);
+    /** Min timeout ms ({@code 250}). */
     private static final long MIN_TIMEOUT_MS = 250;
+    /** Email provider smtp used by lead notification service. */
     private static final String EMAIL_PROVIDER_SMTP = "smtp";
+    /** Email provider resend used by lead notification service. */
     private static final String EMAIL_PROVIDER_RESEND = "resend";
 
+    /** Mail sender provider. */
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
+    /** Email executor. */
     private final ExecutorService emailExecutor;
+    /** Client used to send the outbound HTTP request. */
     private final HttpClient httpClient;
+    /** Whether the capability is enabled. */
     private final boolean enabled;
+    /** Email provider. */
     private final String emailProvider;
+    /** Notification to. */
     private final String notificationTo;
+    /** Notification from. */
     private final String notificationFrom;
+    /** Notification timeout ms. */
     private final long notificationTimeoutMs;
+    /** Key identifying the resend API. */
     private final String resendApiKey;
+    /** URL for resend API. */
     private final URI resendApiUrl;
+    /** URL for admin dashboard. */
     private final String adminDashboardUrl;
+    /** URL for brand logo. */
     private final String brandLogoUrl;
+    /** URL for brand header image. */
     private final String brandHeaderImageUrl;
+    /** Smtp host. */
     private final String smtpHost;
+    /** Smtp port. */
     private final int smtpPort;
+    /** Smtp username. */
     private final String smtpUsername;
+    /** Whether smtp auth is enabled. */
     private final boolean smtpAuthEnabled;
+    /** Whether smtp start tls is enabled. */
     private final boolean smtpStartTlsEnabled;
+    /** Smtp start tls required. */
     private final boolean smtpStartTlsRequired;
 
+    /**
+     * Creates the lead notification service with its injected collaborators.
+     *
+     * @param mailSenderProvider mail sender provider
+     * @param objectMapper Jackson mapper used to read or write JSON
+     * @param enabled whether the capability is enabled
+     * @param emailProvider email provider
+     * @param notificationTo notification to
+     * @param notificationFrom notification from
+     * @param notificationTimeoutMs notification timeout ms
+     * @param resendApiKey key identifying the resend API
+     * @param resendApiUrl URL for resend API
+     * @param adminDashboardUrl URL for admin dashboard
+     * @param brandLogoUrl URL for brand logo
+     * @param brandHeaderImageUrl URL for brand header image
+     * @param smtpHost smtp host
+     * @param smtpPort smtp port
+     * @param smtpUsername smtp username
+     * @param smtpAuthEnabled whether smtp auth is enabled
+     * @param smtpStartTlsEnabled whether smtp start tls is enabled
+     * @param smtpStartTlsRequired smtp start tls required
+     */
     public LeadNotificationService(
             ObjectProvider<JavaMailSender> mailSenderProvider,
             ObjectMapper objectMapper,
@@ -124,6 +171,12 @@ public class LeadNotificationService {
         );
     }
 
+    /**
+     * Sends lead created notification.
+     *
+     * @param lead sales enquiry in scope
+     * @return the email notification result
+     */
     public EmailNotificationResult sendLeadCreatedNotification(LeadEntity lead) {
         if (!enabled) {
             logger.info("Lead email notification skipped for lead {} because email notifications are disabled.", lead.getId());
@@ -193,6 +246,11 @@ public class LeadNotificationService {
         }
     }
 
+    /**
+     * Retrieves diagnostics.
+     *
+     * @return the resulting key–value pairs
+     */
     public Map<String, Object> getDiagnostics() {
         Map<String, Object> diagnostics = new LinkedHashMap<>();
         diagnostics.put("enabled", enabled);
@@ -214,11 +272,19 @@ public class LeadNotificationService {
         return diagnostics;
     }
 
+    /** Performs the shutdown executor operation. */
     @PreDestroy
     void shutdownExecutor() {
         emailExecutor.shutdownNow();
     }
 
+    /**
+     * Sends smtp email.
+     *
+     * @param mailSender mail sender
+     * @param lead sales enquiry in scope
+     * @return the email notification result
+     */
     private EmailNotificationResult sendSmtpEmail(JavaMailSender mailSender, LeadEntity lead) {
         try {
             logger.info(
@@ -269,6 +335,12 @@ public class LeadNotificationService {
         }
     }
 
+    /**
+     * Sends resend email.
+     *
+     * @param lead sales enquiry in scope
+     * @return the email notification result
+     */
     private EmailNotificationResult sendResendEmail(LeadEntity lead) {
         try {
             logger.info(
@@ -335,6 +407,12 @@ public class LeadNotificationService {
         }
     }
 
+    /**
+     * Validates resend configuration.
+     *
+     * @param lead sales enquiry in scope
+     * @return the email notification result
+     */
     private EmailNotificationResult validateResendConfiguration(LeadEntity lead) {
         if (resendApiKey.isBlank()) {
             logger.warn("Lead email notification API key is not configured for lead {}. provider={}", lead.getId(), emailProvider);
@@ -349,6 +427,13 @@ public class LeadNotificationService {
         return null;
     }
 
+    /**
+     * Builds resend payload.
+     *
+     * @param lead sales enquiry in scope
+     * @return the resulting text
+     * @throws IllegalArgumentException when validation reports “Could not build Resend email payload”
+     */
     private String buildResendPayload(LeadEntity lead) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("from", notificationFrom.trim());
@@ -370,6 +455,12 @@ public class LeadNotificationService {
         }
     }
 
+    /**
+     * Interprets the mail provider’s HTTP response for delivery diagnostics.
+     *
+     * @param statusCode HTTP status returned by the request
+     * @return the resulting text
+     */
     private String describeResendStatus(int statusCode) {
         if (statusCode == 401 || statusCode == 403) {
             return "Email API authentication failed. Check RESEND_API_KEY.";
@@ -390,6 +481,12 @@ public class LeadNotificationService {
         return "Email API request failed. Check Resend configuration and provider logs.";
     }
 
+    /**
+     * Builds the explanation for a failed delivery attempt.
+     *
+     * @param ex ex
+     * @return the resulting text
+     */
     private String describeFailure(Exception ex) {
         String failureType = classifyFailure(ex);
 
@@ -408,6 +505,12 @@ public class LeadNotificationService {
         return "Email notification could not be sent. Check Render SMTP environment variables and backend logs.";
     }
 
+    /**
+     * Groups the failed delivery into the category used by its diagnostics.
+     *
+     * @param ex ex
+     * @return the resulting text
+     */
     private String classifyFailure(Exception ex) {
         String details = failureDetails(ex);
 
@@ -436,6 +539,12 @@ public class LeadNotificationService {
         return "unknown";
     }
 
+    /**
+     * Normalizes provider. Uses locale-independent case normalization.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String normalizeProvider(String value) {
         if (value == null || value.isBlank()) {
             return EMAIL_PROVIDER_SMTP;
@@ -444,6 +553,12 @@ public class LeadNotificationService {
         return value.trim().toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * Parses resend API URL.
+     *
+     * @param value stored or supplied representation
+     * @return the uri
+     */
     private URI parseResendApiUrl(String value) {
         String apiUrl = value == null || value.isBlank()
                 ? "https://api.resend.com/emails"
@@ -451,10 +566,22 @@ public class LeadNotificationService {
         return URI.create(apiUrl);
     }
 
+    /**
+     * Collects diagnostic information about an unsuccessful delivery.
+     *
+     * @param ex ex
+     * @return the resulting text
+     */
     private String failureDetails(Exception ex) {
         return rootMessage(ex).toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * Follows nested failures to their underlying cause.
+     *
+     * @param ex ex
+     * @return the throwable
+     */
     private Throwable rootCause(Throwable ex) {
         Throwable root = ex;
         while (root.getCause() != null) {
@@ -464,6 +591,12 @@ public class LeadNotificationService {
         return root;
     }
 
+    /**
+     * Extracts the underlying failure message for diagnostics.
+     *
+     * @param ex ex
+     * @return the resulting text
+     */
     private String rootMessage(Throwable ex) {
         Throwable root = rootCause(ex);
         String message = root.getMessage();
@@ -474,6 +607,12 @@ public class LeadNotificationService {
         return message == null ? "" : message;
     }
 
+    /**
+     * Builds body.
+     *
+     * @param lead sales enquiry in scope
+     * @return the resulting text
+     */
     private String buildBody(LeadEntity lead) {
         String dashboardUrl = dashboardUrl(lead);
         String dashboardLine = dashboardUrl.isBlank()
@@ -513,6 +652,12 @@ public class LeadNotificationService {
         );
     }
 
+    /**
+     * Builds html body.
+     *
+     * @param lead sales enquiry in scope
+     * @return the resulting text
+     */
     private String buildHtmlBody(LeadEntity lead) {
         String dashboardUrl = dashboardUrl(lead);
         String dashboardAction = dashboardUrl.isBlank()
@@ -631,6 +776,13 @@ public class LeadNotificationService {
         );
     }
 
+    /**
+     * Formats one label and value as a row for the HTML email.
+     *
+     * @param label display label
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String htmlRow(String label, String value) {
         return """
                 <tr>
@@ -640,6 +792,12 @@ public class LeadNotificationService {
                 """.formatted(escapeHtml(label), escapeHtml(value));
     }
 
+    /**
+     * Builds the dashboard link included in the notification.
+     *
+     * @param lead sales enquiry in scope
+     * @return the resulting text
+     */
     private String dashboardUrl(LeadEntity lead) {
         if (adminDashboardUrl.isBlank()) {
             return "";
@@ -651,6 +809,12 @@ public class LeadNotificationService {
                 .replace("{id}", leadId);
     }
 
+    /**
+     * Removes line breaks and trims the text before it is used in a mail header.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String cleanSubject(String value) {
         String cleaned = safe(value).replaceAll("[\\r\\n]+", " ").trim();
         if (cleaned.isBlank()) {
@@ -659,10 +823,22 @@ public class LeadNotificationService {
         return cleaned.length() > 80 ? cleaned.substring(0, 80) : cleaned;
     }
 
+    /**
+     * Removes line breaks and trims the text before it is used in a mail header.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String cleanHeader(String value) {
         return safe(value).replaceAll("[\\r\\n]+", "").trim();
     }
 
+    /**
+     * Normalizes the image link before it is included in the outgoing message.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String cleanImageUrl(String value) {
         String cleaned = safe(value).replaceAll("[\\r\\n\\t]+", "").trim();
         if (cleaned.startsWith("https://")) {
@@ -676,6 +852,12 @@ public class LeadNotificationService {
         return "";
     }
 
+    /**
+     * Escapes special characters before embedding the value in generated markup.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String escapeHtml(String value) {
         return safe(value)
                 .replace("&", "&amp;")
@@ -685,14 +867,32 @@ public class LeadNotificationService {
                 .replace("'", "&#39;");
     }
 
+    /**
+     * Returns the textual representation of the value, using an empty string for null.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String safe(Object value) {
         return value == null ? "" : value.toString();
     }
 
+    /**
+     * Trims surrounding whitespace. Absent values return null.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
+    /**
+     * Reduces the supplied value to a form suitable for the notification log.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String safeLogValue(String value) {
         if (value == null || value.isBlank()) {
             return "(blank)";

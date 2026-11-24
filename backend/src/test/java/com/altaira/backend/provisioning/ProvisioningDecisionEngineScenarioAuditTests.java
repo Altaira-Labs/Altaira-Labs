@@ -34,11 +34,17 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Stream;
 
+/**
+ * Exercises provisioning decision engine scenario audit behavior with JUnit. Individual cases include {@code auditHarnessUsesDryRunProvidersOnly} and {@code prioritySectorDemosRemainExactRegressionContracts}.
+ */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ProvisioningDecisionEngineScenarioAuditTests {
 
+    /** Catalog resource used by provisioning decision engine scenario audit tests. */
     private static final String CATALOG_RESOURCE = "/provisioning/provisioning-engine-scenarios.json";
+    /** Expected scenario count ({@code 50}). */
     private static final int EXPECTED_SCENARIO_COUNT = 50;
+    /** Ordered requirements used by provisioning decision engine scenario audit tests. */
     private static final List<String> ORDERED_REQUIREMENTS = List.of(
             RequirementSet.DATABASE,
             RequirementSet.BACKEND,
@@ -59,14 +65,26 @@ class ProvisioningDecisionEngineScenarioAuditTests {
             RequirementSet.EXTERNAL_INTEGRATIONS
     );
 
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper = new ObjectMapper();
+    /** Outcomes collected so far. */
     private final List<ProvisioningScenarioAuditResult> results = new ArrayList<>();
+    /** Scenarios. */
     private List<ProvisioningAuditScenario> scenarios;
+    /** Provider registry. */
     private ProvisioningProviderRegistry providerRegistry;
+    /** Normalizer. */
     private ProvisioningRequirementNormalizer normalizer;
+    /** Engine. */
     private ProvisioningDecisionEngine engine;
+    /** Report path. */
     private Path reportPath;
 
+    /**
+     * Loads audit harness.
+     *
+     * @throws IOException if the underlying input or output cannot be completed
+     */
     @BeforeAll
     void loadAuditHarness() throws IOException {
         scenarios = loadScenarios();
@@ -90,9 +108,12 @@ class ProvisioningDecisionEngineScenarioAuditTests {
         ));
         normalizer = new ProvisioningRequirementNormalizer();
         engine = new ProvisioningDecisionEngine(providerRegistry);
-        reportPath = locateRepositoryRoot().resolve("reports/provisioning-engine-scenario-audit.md");
+        reportPath = Path.of("target", "reports", "provisioning-engine-scenario-audit.md");
     }
 
+    /**
+     * Checks that the scenario harness registers preview adapters only. A live provider would invalidate the offline regression test.
+     */
     @Test
     void auditHarnessUsesDryRunProvidersOnly() {
         Assertions.assertFalse(providerRegistry.all().isEmpty());
@@ -100,6 +121,7 @@ class ProvisioningDecisionEngineScenarioAuditTests {
                 "An executable provider was registered in the audit-only harness.");
     }
 
+    /** Regression case: priority sector demos remain exact regression contracts. */
     @Test
     void prioritySectorDemosRemainExactRegressionContracts() {
         List<ProvisioningAuditScenario> demos = scenarios.stream()
@@ -127,6 +149,13 @@ class ProvisioningDecisionEngineScenarioAuditTests {
         }
     }
 
+    /**
+     * Regression case: audits expected vs actual.
+     *
+     * @param id unique identifier of the record
+     * @param name name used to identify the item
+     * @param scenario scenario
+     */
     @ParameterizedTest(name = "{0} - {1}")
     @MethodSource("scenarioArguments")
     void auditsExpectedVsActual(String id, String name, ProvisioningAuditScenario scenario) {
@@ -152,10 +181,20 @@ class ProvisioningDecisionEngineScenarioAuditTests {
         }
     }
 
+    /**
+     * Exposes the scenario catalogue as JUnit parameterized-test arguments.
+     *
+     * @return the value produced by this operation
+     */
     Stream<Arguments> scenarioArguments() {
         return scenarios.stream().map(scenario -> Arguments.of(scenario.id(), scenario.name(), scenario));
     }
 
+    /**
+     * Writes audit report.
+     *
+     * @throws IOException if the underlying input or output cannot be completed
+     */
     @AfterAll
     void writeAuditReport() throws IOException {
         Assertions.assertEquals(EXPECTED_SCENARIO_COUNT, results.size(),
@@ -169,6 +208,12 @@ class ProvisioningDecisionEngineScenarioAuditTests {
                 "The generated report appears to contain a secret assignment.");
     }
 
+    /**
+     * Loads scenarios. Copies the list before returning it.
+     *
+     * @return the provisioning audit scenario items
+     * @throws IOException if the underlying input or output cannot be completed
+     */
     private List<ProvisioningAuditScenario> loadScenarios() throws IOException {
         try (InputStream input = getClass().getResourceAsStream(CATALOG_RESOURCE)) {
             if (input == null) {
@@ -182,6 +227,14 @@ class ProvisioningDecisionEngineScenarioAuditTests {
         }
     }
 
+    /**
+     * Compares the computed delivery plan with the scenario’s expected decision. Copies the list before returning it.
+     *
+     * @param scenario scenario
+     * @param actualRequirements actual requirements
+     * @param actualDecision actual decision
+     * @return the provisioning scenario audit result
+     */
     private ProvisioningScenarioAuditResult evaluate(
             ProvisioningAuditScenario scenario,
             RequirementSet actualRequirements,
@@ -261,6 +314,11 @@ class ProvisioningDecisionEngineScenarioAuditTests {
         );
     }
 
+    /**
+     * Checks the planning result carries the explanations and consistent resource keys needed by the audit.
+     *
+     * @param decision decision
+     */
     private void assertExplainableV2Decision(ProvisioningDecision decision) {
         Assertions.assertFalse(decision.tracks().isEmpty(), "Engine v2 must return at least one track.");
         for (TrackDecision track : decision.tracks()) {
@@ -279,26 +337,24 @@ class ProvisioningDecisionEngineScenarioAuditTests {
                 "Shared resources must be deduplicated by key.");
     }
 
-    private Path locateRepositoryRoot() {
-        Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
-        Path candidate = current;
-        while (candidate != null) {
-            boolean hasReports = Files.isDirectory(candidate.resolve("reports"));
-            boolean hasWorkspace = Files.isDirectory(candidate.resolve("Altaira_Labs_web"))
-                    || Files.isDirectory(candidate.resolve("backend"));
-            if (hasReports && hasWorkspace) {
-                return candidate;
-            }
-            candidate = candidate.getParent();
-        }
-        throw new IllegalStateException("Cannot locate repository root from " + current);
-    }
-
+    /**
+     * Checks for secret assignment. Uses locale-independent case normalization.
+     *
+     * @param report report
+     * @return true if the value contains secret assignment
+     */
     private boolean containsSecretAssignment(String report) {
         String normalized = report.toLowerCase(Locale.ROOT);
         return normalized.matches("(?s).*(api[_-]?key|password|secret|token)\\s*[=:]\\s*[^*`\\s].*");
     }
 
+    /**
+     * Checks for ignore case. Uses locale-independent case normalization.
+     *
+     * @param values values
+     * @param expectedKeyword expected keyword
+     * @return true if the value contains ignore case
+     */
     private boolean containsIgnoreCase(List<String> values, String expectedKeyword) {
         String normalizedKeyword = expectedKeyword.toLowerCase(Locale.ROOT);
         return values.stream()
@@ -306,15 +362,34 @@ class ProvisioningDecisionEngineScenarioAuditTests {
                 .anyMatch(value -> value.contains(normalizedKeyword));
     }
 
+    /**
+     * Lists elements present on one side of the comparison and absent from the other.
+     *
+     * @param left left
+     * @param right right
+     * @return the string items
+     */
     private List<String> difference(List<String> left, List<String> right) {
         List<String> result = new ArrayList<>(left);
         result.removeAll(right);
         return result;
     }
 
+    /**
+     * Returns a stable ordering for regression comparisons and report output.
+     *
+     * @param values values
+     * @return the string items
+     */
     private List<String> sorted(java.util.Collection<String> values) {
         return values.stream().sorted(Comparator.naturalOrder()).toList();
     }
 
+    /**
+     * Groups the scenario catalog data used by provisioning decision engine scenario audit tests.
+     *
+     * @param version version
+     * @param scenarios scenarios
+     */
     private record ScenarioCatalog(int version, List<ProvisioningAuditScenario> scenarios) {}
 }

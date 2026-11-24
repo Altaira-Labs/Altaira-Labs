@@ -32,22 +32,48 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+/** Issue and accept single-use client invitations. Invitations are scoped, expiring and stored safely. */
 @Service
 @Transactional
 public class ClientInvitationService {
 
+    /** Client management operations used by this component. */
     private final ClientManagementService clientManagementService;
+    /** Persistence access for client invitation. */
     private final ClientInvitationRepository clientInvitationRepository;
+    /** Persistence access for app user. */
     private final AppUserRepository appUserRepository;
+    /** Persistence access for client user access. */
     private final ClientUserAccessRepository clientUserAccessRepository;
+    /** Encoder used to compare or store credential hashes. */
     private final PasswordEncoder passwordEncoder;
+    /** Auth operations used by this component. */
     private final AuthService authService;
+    /** Security event operations used by this component. */
     private final SecurityEventService securityEventService;
+    /** Onboarding notification operations used by this component. */
     private final OnboardingNotificationService onboardingNotificationService;
+    /** URL for activate. */
     private final String activateUrl;
+    /** Expires days. */
     private final long expiresDays;
+    /** Secure random. */
     private final SecureRandom secureRandom = new SecureRandom();
 
+    /**
+     * Creates the client invitation service with its injected collaborators.
+     *
+     * @param clientManagementService client management operations used by this component
+     * @param clientInvitationRepository persistence access for client invitation
+     * @param appUserRepository persistence access for app user
+     * @param clientUserAccessRepository persistence access for client user access
+     * @param passwordEncoder encoder used to compare or store credential hashes
+     * @param authService auth operations used by this component
+     * @param securityEventService security event operations used by this component
+     * @param onboardingNotificationService onboarding notification operations used by this component
+     * @param activateUrl URL for activate
+     * @param expiresDays expires days
+     */
     public ClientInvitationService(
             ClientManagementService clientManagementService,
             ClientInvitationRepository clientInvitationRepository,
@@ -72,6 +98,16 @@ public class ClientInvitationService {
         this.expiresDays = Math.max(expiresDays, 1);
     }
 
+    /**
+     * Creates an invitation tied to a client, email address and workspace role and returns the link used to accept it.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param request input carrying create client invitation
+     * @param adminUser internal user performing the action
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @return the client invitation response
+     */
     public ClientInvitationResponse createInvitation(UUID clientId, CreateClientInvitationRequest request, AppUserEntity adminUser, String ipAddress, String userAgent) {
         ClientEntity client = clientManagementService.findClientEntity(clientId);
         String email = normalizeEmail(request.getEmail() == null || request.getEmail().isBlank() ? client.getEmail() : request.getEmail());
@@ -109,6 +145,12 @@ public class ClientInvitationService {
         return map(saved, invitationUrl);
     }
 
+    /**
+     * Lists invitations.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @return the client invitation response items
+     */
     @Transactional(readOnly = true)
     public List<ClientInvitationResponse> listInvitations(UUID clientId) {
         ClientEntity client = clientManagementService.findClientEntity(clientId);
@@ -118,6 +160,15 @@ public class ClientInvitationService {
                 .toList();
     }
 
+    /**
+     * Checks that passwords match and that the invitation is active. It creates or updates the client account and workspace membership before marking the invitation accepted.
+     *
+     * @param request input carrying accept client invitation
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @return the login response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (bad request, not found, gone, conflict)
+     */
     public LoginResponse acceptInvitation(AcceptClientInvitationRequest request, String ipAddress, String userAgent) {
         if (!request.getPassword().equals(request.getConfirmPassword())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Passwords do not match");
@@ -196,6 +247,13 @@ public class ClientInvitationService {
         return authService.createSessionForUser(savedUser, ipAddress, userAgent, "Client invitation accepted", false);
     }
 
+    /**
+     * Builds {@code ClientInvitationResponse} from {@code ClientInvitationEntity}, selecting the fields used by the caller.
+     *
+     * @param invitation invitation
+     * @param invitationUrl URL for invitation
+     * @return the client invitation response
+     */
     private ClientInvitationResponse map(ClientInvitationEntity invitation, String invitationUrl) {
         return new ClientInvitationResponse(
                 invitation.getId(),
@@ -214,6 +272,12 @@ public class ClientInvitationService {
         );
     }
 
+    /**
+     * Reports whether the invitation was accepted, revoked, expired or is still pending.
+     *
+     * @param invitation invitation
+     * @return the resulting text
+     */
     private String status(ClientInvitationEntity invitation) {
         Instant now = Instant.now();
 
@@ -232,11 +296,24 @@ public class ClientInvitationService {
         return "pending";
     }
 
+    /**
+     * Builds the workspace invitation link for the recipient.
+     *
+     * @param token credential supplied for this operation
+     * @return the resulting text
+     */
     private String invitationUrl(String token) {
         String separator = activateUrl.contains("?") ? "&" : "?";
         return activateUrl + separator + "token=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
     }
 
+    /**
+     * Normalizes email. Uses locale-independent case normalization.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     * @throws IllegalArgumentException when validation reports “Client invitation email is required”
+     */
     private String normalizeEmail(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("Client invitation email is required");
@@ -245,6 +322,13 @@ public class ClientInvitationService {
         return value.trim().toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * Normalizes role. Uses locale-independent case normalization.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     * @throws IllegalArgumentException when validation reports “Client invitation role must be client_user or viewer”
+     */
     private String normalizeRole(String value) {
         if (value == null || value.isBlank()) {
             return "client_user";
@@ -258,12 +342,24 @@ public class ClientInvitationService {
         return normalized;
     }
 
+    /**
+     * Creates raw token.
+     *
+     * @return the resulting text
+     */
     private String createRawToken() {
         byte[] tokenBytes = new byte[32];
         secureRandom.nextBytes(tokenBytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
     }
 
+    /**
+     * Computes a SHA-256 digest for stored token lookup.
+     *
+     * @param token credential supplied for this operation
+     * @return the resulting text
+     * @throws IllegalStateException when validation reports “SHA-256 is not available”
+     */
     private String hashToken(String token) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -273,6 +369,13 @@ public class ClientInvitationService {
         }
     }
 
+    /**
+     * Trims surrounding whitespace and caps the result at the supplied length. Absent values return null.
+     *
+     * @param value stored or supplied representation
+     * @param limit upper bound applied when reading or accepting data
+     * @return the resulting text
+     */
     private String trimToLimit(String value, int limit) {
         if (value == null || value.isBlank()) {
             return null;

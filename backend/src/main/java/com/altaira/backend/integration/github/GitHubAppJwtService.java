@@ -17,9 +17,11 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/** Signs the short-lived application credential exchanged for a GitHub installation token. */
 @Service
 public class GitHubAppJwtService {
 
+    /** Rsa algorithm identifier used by GitHub app JWT service. */
     private static final byte[] RSA_ALGORITHM_IDENTIFIER = new byte[] {
             0x30, 0x0d,
             0x06, 0x09,
@@ -27,19 +29,38 @@ public class GitHubAppJwtService {
             0x05, 0x00
     };
 
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
+    /** Source of time used by the operation. */
     private final Clock clock;
 
+    /**
+     * Constructs {@code GitHubAppJwtService} using the supplied object mapper.
+     *
+     * @param objectMapper Jackson mapper used to read or write JSON
+     */
     @Autowired
     public GitHubAppJwtService(ObjectMapper objectMapper) {
         this(objectMapper, Clock.systemUTC());
     }
 
+    /**
+     * Constructs {@code GitHubAppJwtService} using the supplied object mapper, clock.
+     *
+     * @param objectMapper Jackson mapper used to read or write JSON
+     * @param clock source of time used by the operation
+     */
     GitHubAppJwtService(ObjectMapper objectMapper, Clock clock) {
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
 
+    /**
+     * Creates JWT.
+     *
+     * @param properties properties
+     * @return the resulting text
+     */
     public String createJwt(GitHubAppProperties properties) {
         if (properties.appId().isBlank()) {
             throw GitHubIntegrationException.missingConfiguration("GITHUB_APP_ID is required.");
@@ -72,6 +93,12 @@ public class GitHubAppJwtService {
         }
     }
 
+    /**
+     * Parses private key.
+     *
+     * @param privateKeyBase64 private key base64
+     * @return the private key
+     */
     private PrivateKey parsePrivateKey(String privateKeyBase64) {
         try {
             byte[] decoded = Base64.getDecoder().decode(privateKeyBase64.replaceAll("\\s+", ""));
@@ -87,6 +114,12 @@ public class GitHubAppJwtService {
         }
     }
 
+    /**
+     * Parses pem.
+     *
+     * @param pem pem
+     * @return the private key
+     */
     private PrivateKey parsePem(String pem) {
         String type = pem.contains("BEGIN RSA PRIVATE KEY") ? "RSA PRIVATE KEY" : "PRIVATE KEY";
         String normalized = pem
@@ -100,6 +133,12 @@ public class GitHubAppJwtService {
         return generatePrivateKey(der);
     }
 
+    /**
+     * Parses pkcs8 or pkcs1.
+     *
+     * @param der der
+     * @return the private key
+     */
     private PrivateKey parsePkcs8OrPkcs1(byte[] der) {
         try {
             return generatePrivateKey(der);
@@ -108,6 +147,12 @@ public class GitHubAppJwtService {
         }
     }
 
+    /**
+     * Generates private key.
+     *
+     * @param pkcs8Der pkcs8 der
+     * @return the private key
+     */
     private PrivateKey generatePrivateKey(byte[] pkcs8Der) {
         try {
             return KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(pkcs8Der));
@@ -116,6 +161,13 @@ public class GitHubAppJwtService {
         }
     }
 
+    /**
+     * Generates the signature over the supplied input using the configured key.
+     *
+     * @param signingInput signing input
+     * @param privateKey key identifying the private
+     * @return the resulting text
+     */
     private String sign(String signingInput, PrivateKey privateKey) {
         try {
             Signature signature = Signature.getInstance("SHA256withRSA");
@@ -127,10 +179,22 @@ public class GitHubAppJwtService {
         }
     }
 
+    /**
+     * Encodes the supplied bytes in URL-safe Base64.
+     *
+     * @param bytes binary content associated with the item
+     * @return the resulting text
+     */
     private String base64Url(byte[] bytes) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
+    /**
+     * Builds the key encoding required by the Java signing provider.
+     *
+     * @param pkcs1Der pkcs1 der
+     * @return the resulting binary content
+     */
     private byte[] wrapPkcs1PrivateKey(byte[] pkcs1Der) {
         byte[] version = new byte[] {0x02, 0x01, 0x00};
         byte[] privateKeyOctetString = concat(new byte[] {0x04}, encodeLength(pkcs1Der.length), pkcs1Der);
@@ -138,6 +202,12 @@ public class GitHubAppJwtService {
         return concat(new byte[] {0x30}, encodeLength(body.length), body);
     }
 
+    /**
+     * Encodes length.
+     *
+     * @param length length
+     * @return the resulting binary content
+     */
     private byte[] encodeLength(int length) {
         if (length < 128) {
             return new byte[] {(byte) length};
@@ -159,6 +229,12 @@ public class GitHubAppJwtService {
         return encoded;
     }
 
+    /**
+     * Joins the supplied groups of bytes in order.
+     *
+     * @param arrays arrays
+     * @return the resulting binary content
+     */
     private byte[] concat(byte[]... arrays) {
         int total = 0;
         for (byte[] array : arrays) {

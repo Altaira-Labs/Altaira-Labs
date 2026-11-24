@@ -6,19 +6,37 @@ import com.altaira.backend.model.ProvisioningRoute;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Selects tools, delivery work and manual steps for the dashboard service track. */
 public final class DashboardTrackDecisionPolicy implements TrackDecisionPolicy {
 
+    /** Tools included in the delivery decision. */
     private final ProvisioningToolCatalog tools;
 
+    /**
+     * Constructs {@code DashboardTrackDecisionPolicy} using the supplied tools.
+     *
+     * @param tools tools included in the delivery decision
+     */
     public DashboardTrackDecisionPolicy(ProvisioningToolCatalog tools) {
         this.tools = tools;
     }
 
+    /**
+     * Identifies the track this policy handles for the dashboard track.
+     *
+     * @return the provisioning track
+     */
     @Override
     public ProvisioningTrack track() {
         return ProvisioningTrack.DASHBOARD;
     }
 
+    /**
+     * Determines whether supports applies.
+     *
+     * @param context context carrying provisioning decision
+     * @return true when the check succeeds
+     */
     @Override
     public boolean supports(ProvisioningDecisionContext context) {
         return context.recommends(track())
@@ -26,6 +44,12 @@ public final class DashboardTrackDecisionPolicy implements TrackDecisionPolicy {
                 || context.requirements().has(RequirementSet.DASHBOARD);
     }
 
+    /**
+     * Applies the dashboard track rules to the supplied discovery context and returns a plan for that track.
+     *
+     * @param context context carrying provisioning decision
+     * @return the track decision
+     */
     @Override
     public TrackDecision decide(ProvisioningDecisionContext context) {
         boolean custom = context.requirements().has(RequirementSet.REALTIME);
@@ -63,6 +87,13 @@ public final class DashboardTrackDecisionPolicy implements TrackDecisionPolicy {
         );
     }
 
+    /**
+     * Chooses which tools to include or exclude for the proposed work for the dashboard track.
+     *
+     * @param context context carrying provisioning decision
+     * @param custom custom
+     * @return the tool decision items
+     */
     private List<ProvisioningDecision.ToolDecision> selectedTools(
             ProvisioningDecisionContext context,
             boolean custom
@@ -88,6 +119,13 @@ public final class DashboardTrackDecisionPolicy implements TrackDecisionPolicy {
         return result;
     }
 
+    /**
+     * Collects the work that still requires a person for the dashboard track.
+     *
+     * @param context context carrying provisioning decision
+     * @param custom custom
+     * @return the manual step decision items
+     */
     private List<ProvisioningDecision.ManualStepDecision> manualSteps(
             ProvisioningDecisionContext context,
             boolean custom
@@ -136,6 +174,12 @@ public final class DashboardTrackDecisionPolicy implements TrackDecisionPolicy {
         return result;
     }
 
+    /**
+     * Appends data governance reviews.
+     *
+     * @param result result produced by the operation
+     * @param context context carrying provisioning decision
+     */
     private void appendDataGovernanceReviews(
             List<ProvisioningDecision.ManualStepDecision> result,
             ProvisioningDecisionContext context
@@ -148,6 +192,13 @@ public final class DashboardTrackDecisionPolicy implements TrackDecisionPolicy {
         }
     }
 
+    /**
+     * Describes the deliverables to include in the plan for the dashboard track.
+     *
+     * @param context context carrying provisioning decision
+     * @param selected selected
+     * @return the plan item decision items
+     */
     private List<ProvisioningDecision.PlanItemDecision> planItems(
             ProvisioningDecisionContext context,
             List<ProvisioningDecision.ToolDecision> selected

@@ -13,8 +13,16 @@ import java.util.Base64;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+/**
+ * Exercises GitHub app JWT service behavior with JUnit. Individual cases include {@code createsJwtFromBase64EncodedPemWithoutExposingPrivateKey} and {@code invalidPrivateKeyBase64ReturnsSafeError}.
+ */
 class GitHubAppJwtServiceTests {
 
+    /**
+     * Regression case: creates JWT from base64 encoded pem without exposing private key.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void createsJwtFromBase64EncodedPemWithoutExposingPrivateKey() throws Exception {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
@@ -46,6 +54,7 @@ class GitHubAppJwtServiceTests {
         assertEquals(3, jwt.split("\\.").length);
     }
 
+    /** Regression case: invalid private key base64 returns safe error. */
     @Test
     void invalidPrivateKeyBase64ReturnsSafeError() {
         var properties = new GitHubAppProperties(

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/** HTTP endpoints for client invitation under {@code /api/v1/client-invitations}. */
 @RestController
 @RequestMapping("/api/v1/client-invitations")
 @CrossOrigin(origins = {
@@ -20,12 +21,25 @@ import org.springframework.web.bind.annotation.RestController;
 })
 public class ClientInvitationController {
 
+    /** Client invitation operations used by this component. */
     private final ClientInvitationService clientInvitationService;
 
+    /**
+     * Creates the client invitation controller with its injected collaborators.
+     *
+     * @param clientInvitationService client invitation operations used by this component
+     */
     public ClientInvitationController(ClientInvitationService clientInvitationService) {
         this.clientInvitationService = clientInvitationService;
     }
 
+    /**
+     * POST {@code /api/v1/client-invitations/accept}. Accepts invitation.
+     *
+     * @param request input carrying accept client invitation
+     * @param httpRequest incoming HTTP request, including its headers
+     * @return the HTTP response for this operation
+     */
     @PostMapping("/accept")
     public ResponseEntity<LoginResponse> acceptInvitation(
             @Valid @RequestBody AcceptClientInvitationRequest request,
@@ -38,6 +52,12 @@ public class ClientInvitationController {
         ));
     }
 
+    /**
+     * Obtains the network address associated with the request.
+     *
+     * @param request input carrying http servlet
+     * @return the resulting text
+     */
     private String clientIp(HttpServletRequest request) {
         String forwardedFor = request.getHeader("X-Forwarded-For");
         if (forwardedFor != null && !forwardedFor.isBlank()) {
@@ -47,6 +67,12 @@ public class ClientInvitationController {
         return request.getRemoteAddr();
     }
 
+    /**
+     * Reads the User-Agent header for the operation’s audit context.
+     *
+     * @param request input carrying http servlet
+     * @return the resulting text
+     */
     private String userAgent(HttpServletRequest request) {
         return request.getHeader("User-Agent");
     }

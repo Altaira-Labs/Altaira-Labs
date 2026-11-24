@@ -49,27 +49,54 @@ import java.util.UUID;
 @Transactional
 public class JiraProvisioningExecutionService {
 
+    /** Confirmation used by Jira provisioning execution service. */
     public static final String CONFIRMATION = "CONFIRM_JIRA_ISSUES";
+    /** Provider used by Jira provisioning execution service. */
     private static final String PROVIDER = "JIRA";
+    /** Source run suffix used by Jira provisioning execution service. */
     private static final String SOURCE_RUN_SUFFIX = ":commercial-v1";
+    /** Live run suffix used by Jira provisioning execution service. */
     private static final String LIVE_RUN_SUFFIX = ":jira-issues-live-v1";
+    /** Max issues per execution ({@code 40}). */
     private static final int MAX_ISSUES_PER_EXECUTION = 40;
+    /** Executable plan statuses used by Jira provisioning execution service. */
     private static final Set<String> EXECUTABLE_PLAN_STATUSES = Set.of(
             ProvisioningPlanStatus.APPROVED.value(),
             ProvisioningPlanStatus.PROVISIONED.value(),
             ProvisioningPlanStatus.PARTIALLY_COMPLETED.value()
     );
+    /** Logger for this component. */
     private static final Logger logger = LoggerFactory.getLogger(JiraProvisioningExecutionService.class);
 
+    /** Persistence access for plan. */
     private final ProvisioningPlanRepository planRepository;
+    /** Persistence access for commercial flow. */
     private final CommercialFlowRepository commercialFlowRepository;
+    /** Persistence access for run. */
     private final ProvisioningRunRepository runRepository;
+    /** Persistence access for step. */
     private final ProvisioningStepRepository stepRepository;
+    /** Persistence access for external resource. */
     private final ProvisioningExternalResourceRepository externalResourceRepository;
+    /** Issue provisioner. */
     private final JiraIssueProvisioner issueProvisioner;
+    /** Properties. */
     private final JiraProperties properties;
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
 
+    /**
+     * Creates the Jira provisioning execution service with its injected collaborators.
+     *
+     * @param planRepository persistence access for plan
+     * @param commercialFlowRepository persistence access for commercial flow
+     * @param runRepository persistence access for run
+     * @param stepRepository persistence access for step
+     * @param externalResourceRepository persistence access for external resource
+     * @param issueProvisioner issue provisioner
+     * @param properties properties
+     * @param objectMapper Jackson mapper used to read or write JSON
+     */
     public JiraProvisioningExecutionService(
             ProvisioningPlanRepository planRepository,
             CommercialFlowRepository commercialFlowRepository,
@@ -90,6 +117,14 @@ public class JiraProvisioningExecutionService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Executes issues. Persists changes through {@code runRepository}. Copies the list before returning it.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @param request input carrying execute Jira issues
+     * @return the Jira issue execution response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (not found, conflict)
+     */
     public JiraIssueExecutionResponse executeIssues(UUID planId, ExecuteJiraIssuesRequest request) {
         requireConfirmation(request);
         requireProviderExecutionGate();
@@ -177,6 +212,15 @@ public class JiraProvisioningExecutionService {
         );
     }
 
+    /**
+     * Executes source step.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param flow flow
+     * @param liveRun live run
+     * @param sourceStep source step
+     * @return the issue execution
+     */
     private IssueExecution executeSourceStep(
             ProvisioningPlanEntity plan,
             CommercialFlowEntity flow,
@@ -236,6 +280,14 @@ public class JiraProvisioningExecutionService {
         }
     }
 
+    /**
+     * Creates run. Persists changes through {@code runRepository}.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param flow flow
+     * @param idempotencyKey key used to recognize a repeated operation
+     * @return the provisioning run record
+     */
     private ProvisioningRunEntity createRun(
             ProvisioningPlanEntity plan,
             CommercialFlowEntity flow,
@@ -251,6 +303,15 @@ public class JiraProvisioningExecutionService {
         return runRepository.saveAndFlush(run);
     }
 
+    /**
+     * Creates step. Persists changes through {@code stepRepository}.
+     *
+     * @param liveRun live run
+     * @param sourceStep source step
+     * @param summary summary
+     * @param idempotencyKey key used to recognize a repeated operation
+     * @return the provisioning step record
+     */
     private ProvisioningStepEntity createStep(
             ProvisioningRunEntity liveRun,
             ProvisioningStepEntity sourceStep,
@@ -281,6 +342,11 @@ public class JiraProvisioningExecutionService {
         return stepRepository.save(step);
     }
 
+    /**
+     * Marks running. Persists changes through {@code stepRepository}.
+     *
+     * @param step step
+     */
     private void markRunning(ProvisioningStepEntity step) {
         Instant now = Instant.now();
         step.setStatus(ProvisioningStepStatus.RUNNING.name());
@@ -291,6 +357,15 @@ public class JiraProvisioningExecutionService {
         stepRepository.save(step);
     }
 
+    /**
+     * Persists success. Persists changes through {@code stepRepository}.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param step step
+     * @param resourceKey key identifying the resource
+     * @param result outcome carrying Jira issue provisioning
+     * @return the provisioning external resource record
+     */
     private ProvisioningExternalResourceEntity persistSuccess(
             ProvisioningPlanEntity plan,
             ProvisioningStepEntity step,
@@ -318,6 +393,14 @@ public class JiraProvisioningExecutionService {
         return resource;
     }
 
+    /**
+     * Persists failure. Persists changes through {@code stepRepository}.
+     *
+     * @param step step
+     * @param summary summary
+     * @param safeMessage message suitable for display in the interface
+     * @return the issue execution
+     */
     private IssueExecution persistFailure(ProvisioningStepEntity step, String summary, String safeMessage) {
         String message = boundedMessage(safeMessage);
         step.setStatus(ProvisioningStepStatus.FAILED.name());
@@ -332,6 +415,17 @@ public class JiraProvisioningExecutionService {
         );
     }
 
+    /**
+     * Combines the attempted step and its provider resource into one issue-delivery result.
+     *
+     * @param step step
+     * @param summary summary
+     * @param created whether a resource was created
+     * @param reused whether an existing resource was used
+     * @param resource resource
+     * @param message text associated with the operation
+     * @return the value produced by this operation
+     */
     private JiraIssueExecutionResponse.IssueResult issueResponse(
             ProvisioningStepEntity step,
             String summary,
@@ -354,6 +448,12 @@ public class JiraProvisioningExecutionService {
         );
     }
 
+    /**
+     * Builds the short description of the plan step used as the issue source.
+     *
+     * @param sourceStep source step
+     * @return the resulting text
+     */
     private String sourceSummary(ProvisioningStepEntity sourceStep) {
         try {
             Map<String, Object> summary = objectMapper.readValue(
@@ -372,6 +472,14 @@ public class JiraProvisioningExecutionService {
         return normalized.substring(0, Math.min(normalized.length(), 255));
     }
 
+    /**
+     * Formats the approved delivery step for a Jira issue.
+     *
+     * @param plan proposed or saved delivery plan
+     * @param flow flow
+     * @param sourceStep source step
+     * @return the resulting text
+     */
     private String issueDescription(
             ProvisioningPlanEntity plan,
             CommercialFlowEntity flow,
@@ -384,6 +492,12 @@ public class JiraProvisioningExecutionService {
                 + "Provisioning plan: " + plan.getId();
     }
 
+    /**
+     * Tracks labels. Uses locale-independent case normalization.
+     *
+     * @param track service track within the delivery plan
+     * @return the string items
+     */
     private List<String> trackLabels(String track) {
         if (track == null || track.isBlank()) {
             return List.of();
@@ -394,14 +508,33 @@ public class JiraProvisioningExecutionService {
         return normalized.isBlank() ? List.of() : List.of(normalized);
     }
 
+    /**
+     * Builds the stable Jira label used to recognize a previously created issue.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @param sourceStepId identifier of the source step
+     * @return the resulting text
+     */
     private String idempotencyLabel(UUID planId, UUID sourceStepId) {
         return "altaira-plan-" + compact(planId) + "-step-" + compact(sourceStepId);
     }
 
+    /**
+     * Builds a compact description for the provider payload.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String compact(UUID value) {
         return value.toString().replace("-", "");
     }
 
+    /**
+     * Requires confirmation.
+     *
+     * @param request input carrying execute Jira issues
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (bad request)
+     */
     private void requireConfirmation(ExecuteJiraIssuesRequest request) {
         if (request == null || !CONFIRMATION.equals(request.confirmation())) {
             throw new ResponseStatusException(
@@ -411,6 +544,11 @@ public class JiraProvisioningExecutionService {
         }
     }
 
+    /**
+     * Requires provider execution gate.
+     *
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (conflict, service unavailable)
+     */
     private void requireProviderExecutionGate() {
         if (!properties.canMutateResources()) {
             throw new ResponseStatusException(
@@ -426,6 +564,12 @@ public class JiraProvisioningExecutionService {
         }
     }
 
+    /**
+     * Requires approved plan.
+     *
+     * @param plan proposed or saved delivery plan
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (conflict)
+     */
     private void requireApprovedPlan(ProvisioningPlanEntity plan) {
         if (!EXECUTABLE_PLAN_STATUSES.contains(plan.getStatus())) {
             throw new ResponseStatusException(
@@ -435,6 +579,12 @@ public class JiraProvisioningExecutionService {
         }
     }
 
+    /**
+     * Requires activated flow.
+     *
+     * @param flow flow
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (conflict)
+     */
     private void requireActivatedFlow(CommercialFlowEntity flow) {
         boolean active = CommercialPaymentStatus.PAYMENT_CONFIRMED.name().equals(flow.getPaymentStatus())
                 && CommercialClientStatus.CLIENT_ACTIVE.name().equals(flow.getClientStatus())
@@ -449,6 +599,12 @@ public class JiraProvisioningExecutionService {
         }
     }
 
+    /**
+     * Limits the message length retained in the response.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String boundedMessage(String value) {
         String message = value == null || value.isBlank()
                 ? "Jira issue provisioning failed safely."
@@ -456,10 +612,23 @@ public class JiraProvisioningExecutionService {
         return message.substring(0, Math.min(message.length(), 1000));
     }
 
+    /**
+     * Limits the action description retained in the result.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String boundedAction(String value) {
         return value.length() <= 100 ? value : value.substring(0, 97) + "...";
     }
 
+    /**
+     * Converts the value to JSON.
+     *
+     * @param value stored or supplied representation
+     * @return JSON
+     * @throws IllegalStateException when validation reports “Jira provisioning input summary could not be stored”
+     */
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -468,6 +637,14 @@ public class JiraProvisioningExecutionService {
         }
     }
 
+    /**
+     * Groups the issue execution data used by Jira provisioning execution service.
+     *
+     * @param response response from the operation
+     * @param created whether a resource was created
+     * @param reused whether an existing resource was used
+     * @param failed failed
+     */
     private record IssueExecution(
             JiraIssueExecutionResponse.IssueResult response,
             boolean created,

@@ -17,18 +17,25 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Exercises demo admin seeder behavior with JUnit. Individual cases include {@code disabledSeederDoesNotReadOrModifyUsers} and {@code enabledSeederRejectsKnownWeakPassword}.
+ */
 @ExtendWith(MockitoExtension.class)
 class DemoAdminSeederTests {
 
+    /** Persistence access for app user. */
     @Mock
     private AppUserRepository appUserRepository;
 
+    /** Encoder used to compare or store credential hashes. */
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    /** Security event operations used by this component. */
     @Mock
     private SecurityEventService securityEventService;
 
+    /** Regression case: disabled seeder does not read or modify users. */
     @Test
     void disabledSeederDoesNotReadOrModifyUsers() {
         DemoAdminSeeder seeder = new DemoAdminSeeder(
@@ -47,6 +54,7 @@ class DemoAdminSeederTests {
         verify(appUserRepository, never()).save(any());
     }
 
+    /** Regression case: enabled seeder reconciles existing configured user. */
     @Test
     void enabledSeederReconcilesExistingConfiguredUser() {
         AppUserEntity existingUser = new AppUserEntity();
@@ -78,6 +86,7 @@ class DemoAdminSeederTests {
         verify(appUserRepository).save(existingUser);
     }
 
+    /** Regression case: enabled seeder rejects known weak password. */
     @Test
     void enabledSeederRejectsKnownWeakPassword() {
         DemoAdminSeeder seeder = new DemoAdminSeeder(

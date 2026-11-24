@@ -6,25 +6,49 @@ import com.altaira.backend.model.ProvisioningRoute;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Selects tools, delivery work and manual steps for the CRM service track. */
 public final class CrmTrackDecisionPolicy implements TrackDecisionPolicy {
 
+    /** Tools included in the delivery decision. */
     private final ProvisioningToolCatalog tools;
 
+    /**
+     * Constructs {@code CrmTrackDecisionPolicy} using the supplied tools.
+     *
+     * @param tools tools included in the delivery decision
+     */
     public CrmTrackDecisionPolicy(ProvisioningToolCatalog tools) {
         this.tools = tools;
     }
 
+    /**
+     * Identifies the track this policy handles for the CRM track.
+     *
+     * @return the provisioning track
+     */
     @Override
     public ProvisioningTrack track() {
         return ProvisioningTrack.CRM;
     }
 
+    /**
+     * Determines whether supports applies.
+     *
+     * @param context context carrying provisioning decision
+     * @return true when the check succeeds
+     */
     @Override
     public boolean supports(ProvisioningDecisionContext context) {
         return context.recommends(track())
                 || "crm".equals(context.formKey());
     }
 
+    /**
+     * Applies the CRM track rules to the supplied discovery context and returns a plan for that track.
+     *
+     * @param context context carrying provisioning decision
+     * @return the track decision
+     */
     @Override
     public TrackDecision decide(ProvisioningDecisionContext context) {
         boolean external = context.equalsAny("currentLeadProcess", "existing_crm");
@@ -68,6 +92,13 @@ public final class CrmTrackDecisionPolicy implements TrackDecisionPolicy {
         );
     }
 
+    /**
+     * Chooses which tools to include or exclude for the proposed work for the CRM track.
+     *
+     * @param context context carrying provisioning decision
+     * @param external external
+     * @return the tool decision items
+     */
     private List<ProvisioningDecision.ToolDecision> selectedTools(
             ProvisioningDecisionContext context,
             boolean external
@@ -101,6 +132,13 @@ public final class CrmTrackDecisionPolicy implements TrackDecisionPolicy {
         return result;
     }
 
+    /**
+     * Collects the work that still requires a person for the CRM track.
+     *
+     * @param context context carrying provisioning decision
+     * @param external external
+     * @return the manual step decision items
+     */
     private List<ProvisioningDecision.ManualStepDecision> manualSteps(
             ProvisioningDecisionContext context,
             boolean external
@@ -147,6 +185,13 @@ public final class CrmTrackDecisionPolicy implements TrackDecisionPolicy {
         return result;
     }
 
+    /**
+     * Describes the deliverables to include in the plan for the CRM track.
+     *
+     * @param context context carrying provisioning decision
+     * @param selected selected
+     * @return the plan item decision items
+     */
     private List<ProvisioningDecision.PlanItemDecision> planItems(
             ProvisioningDecisionContext context,
             List<ProvisioningDecision.ToolDecision> selected

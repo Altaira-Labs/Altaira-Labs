@@ -26,19 +26,39 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Locale;
 
+/** Invitation-aware Google sign-in. Google identity does not bypass workspace entitlement. */
 @Service
 @Transactional
 public class ClientGoogleAuthService {
 
+    /** Persistence access for app user. */
     private final AppUserRepository appUserRepository;
+    /** Persistence access for client user access. */
     private final ClientUserAccessRepository clientUserAccessRepository;
+    /** Auth operations used by this component. */
     private final AuthService authService;
+    /** Security event operations used by this component. */
     private final SecurityEventService securityEventService;
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
+    /** Identifier of the Google client. */
     private final String googleClientId;
+    /** URL for token info. */
     private final URI tokenInfoUrl;
+    /** Client used to send the outbound HTTP request. */
     private final HttpClient httpClient;
 
+    /**
+     * Creates the client Google auth service with its injected collaborators.
+     *
+     * @param appUserRepository persistence access for app user
+     * @param clientUserAccessRepository persistence access for client user access
+     * @param authService auth operations used by this component
+     * @param securityEventService security event operations used by this component
+     * @param objectMapper Jackson mapper used to read or write JSON
+     * @param googleClientId identifier of the Google client
+     * @param tokenInfoUrl URL for token info
+     */
     @Autowired
     public ClientGoogleAuthService(
             AppUserRepository appUserRepository,
@@ -61,6 +81,18 @@ public class ClientGoogleAuthService {
         );
     }
 
+    /**
+     * Creates the client Google auth service with its injected collaborators.
+     *
+     * @param appUserRepository persistence access for app user
+     * @param clientUserAccessRepository persistence access for client user access
+     * @param authService auth operations used by this component
+     * @param securityEventService security event operations used by this component
+     * @param objectMapper Jackson mapper used to read or write JSON
+     * @param googleClientId identifier of the Google client
+     * @param tokenInfoUrl URL for token info
+     * @param httpClient client used to send the outbound HTTP request
+     */
     ClientGoogleAuthService(
             AppUserRepository appUserRepository,
             ClientUserAccessRepository clientUserAccessRepository,
@@ -81,6 +113,15 @@ public class ClientGoogleAuthService {
         this.httpClient = httpClient;
     }
 
+    /**
+     * Authenticates the supplied credentials for the supported sign-in flow.
+     *
+     * @param request input carrying Google client login
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @return the login response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (service unavailable, conflict)
+     */
     public LoginResponse login(GoogleClientLoginRequest request, String ipAddress, String userAgent) {
         if (googleClientId.isBlank()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Google client login is not configured");
@@ -112,6 +153,13 @@ public class ClientGoogleAuthService {
         return authService.createSessionForUser(user, ipAddress, userAgent, "Client Google login");
     }
 
+    /**
+     * Verifies Google credential. Uses locale-independent case normalization.
+     *
+     * @param credential credential
+     * @return the Google identity
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (bad request, unauthorized)
+     */
     private GoogleIdentity verifyGoogleCredential(String credential) {
         if (credential == null || credential.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Google credential is required");
@@ -154,6 +202,16 @@ public class ClientGoogleAuthService {
         return new GoogleIdentity(email);
     }
 
+    /**
+     * Builds the response for a rejected Google sign-in attempt.
+     *
+     * @param email contact email address
+     * @param ipAddress network address associated with the request
+     * @param userAgent client software reported by the HTTP request
+     * @param metadata additional context recorded with the event
+     * @return the response status exception
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (unauthorized)
+     */
     private ResponseStatusException unauthorizedGoogleLogin(String email, String ipAddress, String userAgent, String metadata) {
         securityEventService.record(
                 SecurityEventType.LOGIN_FAILED,
@@ -167,10 +225,22 @@ public class ClientGoogleAuthService {
         return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Google account is not invited to a client workspace");
     }
 
+    /**
+     * Reads a JSON field as text, using an empty string for a missing or null value.
+     *
+     * @param json JSON
+     * @param fieldName field name
+     * @return the resulting text
+     */
     private String text(JsonNode json, String fieldName) {
         JsonNode value = json == null ? null : json.get(fieldName);
         return value == null || value.isNull() ? "" : value.asText("");
     }
 
+    /**
+     * Groups the Google identity data used by client Google auth service.
+     *
+     * @param email contact email address
+     */
     private record GoogleIdentity(String email) {}
 }

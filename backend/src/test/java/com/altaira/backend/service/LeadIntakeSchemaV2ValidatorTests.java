@@ -9,10 +9,15 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+/**
+ * Exercises lead intake schema v2 validator behavior with JUnit. Individual cases include {@code acceptsCompleteGeneralDiagnosticWithCommercialAndInternalSignals} and {@code rejectsNestedObjectsSoCredentialsCannotBeHiddenInStructuredPayloads}.
+ */
 class LeadIntakeSchemaV2ValidatorTests {
 
+    /** Validator. */
     private final LeadIntakeSchemaV2Validator validator = new LeadIntakeSchemaV2Validator();
 
+    /** Regression case: accepts complete general diagnostic with commercial and internal signals. */
     @Test
     void acceptsCompleteGeneralDiagnosticWithCommercialAndInternalSignals() {
         Map<String, Object> responses = new LinkedHashMap<>();
@@ -31,6 +36,7 @@ class LeadIntakeSchemaV2ValidatorTests {
         assertDoesNotThrow(() -> validator.validate(LeadIntakeFormKey.GENERAL, responses));
     }
 
+    /** Regression case: rejects incomplete v2 diagnostic. */
     @Test
     void rejectsIncompleteV2Diagnostic() {
         Map<String, Object> responses = Map.of("primaryGoal", "bookings");
@@ -41,6 +47,7 @@ class LeadIntakeSchemaV2ValidatorTests {
         );
     }
 
+    /** Regression case: requires direction when an existing CRM is selected. */
     @Test
     void requiresDirectionWhenAnExistingCrmIsSelected() {
         Map<String, Object> responses = new LinkedHashMap<>();
@@ -58,6 +65,7 @@ class LeadIntakeSchemaV2ValidatorTests {
         assertDoesNotThrow(() -> validator.validate(LeadIntakeFormKey.CRM, responses));
     }
 
+    /** Regression case: rejects nested objects so credentials cannot be hidden in structured payloads. */
     @Test
     void rejectsNestedObjectsSoCredentialsCannotBeHiddenInStructuredPayloads() {
         Map<String, Object> responses = new LinkedHashMap<>();

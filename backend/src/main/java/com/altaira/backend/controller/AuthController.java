@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
+/** HTTP endpoints for auth under {@code /api/v1/auth}. */
 @RestController
 @RequestMapping("/api/v1/auth")
 @CrossOrigin(origins = {
@@ -24,10 +25,20 @@ import java.util.Map;
 })
 public class AuthController {
 
+    /** Auth operations used by this component. */
     private final AuthService authService;
+    /** Client Google auth operations used by this component. */
     private final ClientGoogleAuthService clientGoogleAuthService;
+    /** Rate limiter operations used by this component. */
     private final RateLimiterService rateLimiterService;
 
+    /**
+     * Creates the auth controller with its injected collaborators.
+     *
+     * @param authService auth operations used by this component
+     * @param clientGoogleAuthService client Google auth operations used by this component
+     * @param rateLimiterService rate limiter operations used by this component
+     */
     public AuthController(
             AuthService authService,
             ClientGoogleAuthService clientGoogleAuthService,
@@ -38,6 +49,13 @@ public class AuthController {
         this.rateLimiterService = rateLimiterService;
     }
 
+    /**
+     * POST {@code /api/v1/auth/login}. Login.
+     *
+     * @param request input carrying login
+     * @param httpRequest incoming HTTP request, including its headers
+     * @return the HTTP response for this operation
+     */
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         String ipAddress = resolveIpAddress(httpRequest);
@@ -55,6 +73,13 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * POST {@code /api/v1/auth/admin/login}. Admin login.
+     *
+     * @param request input carrying login
+     * @param httpRequest incoming HTTP request, including its headers
+     * @return the HTTP response for this operation
+     */
     @PostMapping("/admin/login")
     public ResponseEntity<?> adminLogin(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         String ipAddress = resolveIpAddress(httpRequest);
@@ -72,6 +97,13 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * POST {@code /api/v1/auth/client/login}. Client login.
+     *
+     * @param request input carrying login
+     * @param httpRequest incoming HTTP request, including its headers
+     * @return the HTTP response for this operation
+     */
     @PostMapping("/client/login")
     public ResponseEntity<?> clientLogin(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         String ipAddress = resolveIpAddress(httpRequest);
@@ -89,6 +121,13 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * POST {@code /api/v1/auth/client/google}. Client Google login.
+     *
+     * @param request input carrying Google client login
+     * @param httpRequest incoming HTTP request, including its headers
+     * @return the HTTP response for this operation
+     */
     @PostMapping("/client/google")
     public ResponseEntity<?> clientGoogleLogin(@Valid @RequestBody GoogleClientLoginRequest request, HttpServletRequest httpRequest) {
         String ipAddress = resolveIpAddress(httpRequest);
@@ -105,6 +144,12 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * GET {@code /api/v1/auth/me}. Me.
+     *
+     * @param sessionToken credential used to identify the current session
+     * @return the auth user response
+     */
     @GetMapping("/me")
     public AuthUserResponse me(
             @RequestHeader(name = "X-Admin-Session-Token", required = false) String sessionToken
@@ -112,6 +157,13 @@ public class AuthController {
         return authService.getCurrentUser(sessionToken);
     }
 
+    /**
+     * POST {@code /api/v1/auth/logout}. Logout.
+     *
+     * @param sessionToken credential used to identify the current session
+     * @param httpRequest incoming HTTP request, including its headers
+     * @return the resulting key–value pairs
+     */
     @PostMapping("/logout")
     public Map<String, Boolean> logout(
             @RequestHeader(name = "X-Admin-Session-Token", required = false) String sessionToken,
@@ -121,6 +173,12 @@ public class AuthController {
         return Map.of("success", true);
     }
 
+    /**
+     * Resolves ip address.
+     *
+     * @param request input carrying http servlet
+     * @return the resulting text
+     */
     private String resolveIpAddress(HttpServletRequest request) {
         String forwardedFor = request.getHeader("X-Forwarded-For");
         if (forwardedFor != null && !forwardedFor.isBlank()) {
@@ -130,6 +188,12 @@ public class AuthController {
         return request.getRemoteAddr();
     }
 
+    /**
+     * Resolves user agent.
+     *
+     * @param request input carrying http servlet
+     * @return the resulting text
+     */
     private String resolveUserAgent(HttpServletRequest request) {
         return request.getHeader("User-Agent");
     }

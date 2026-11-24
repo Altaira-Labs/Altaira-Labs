@@ -16,6 +16,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Exercises GitHub integration endpoint behavior with JUnit. Individual cases include {@code githubStatusIsAdminProtectedAndDoesNotExposeSecretsWhenDisabled} and {@code liveJiraExecutionRequiresAdminAndRemainsBlockedByDefault}.
+ */
 @SpringBootTest(properties = {
         "altaira.contact.email.enabled=false"
 })
@@ -23,11 +26,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class GitHubIntegrationEndpointTests {
 
+    /** Internal token used by GitHub integration endpoint tests. */
     private static final String INTERNAL_TOKEN = "test-internal-token";
 
+    /** Mock mvc. */
     @Autowired
     private MockMvc mockMvc;
 
+    /**
+     * Regression case: GitHub status is admin protected and does not expose secrets when disabled.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void githubStatusIsAdminProtectedAndDoesNotExposeSecretsWhenDisabled() throws Exception {
         mockMvc.perform(get("/api/v1/integrations/github/status"))
@@ -50,6 +60,11 @@ class GitHubIntegrationEndpointTests {
                 .andExpect(content().string(not(containsString("token"))));
     }
 
+    /**
+     * Regression case: GitHub dry run returns provisioning plan without creating resources.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void githubDryRunReturnsProvisioningPlanWithoutCreatingResources() throws Exception {
         mockMvc.perform(post("/api/v1/integrations/github/provisioning/dry-run")
@@ -79,6 +94,11 @@ class GitHubIntegrationEndpointTests {
                 .andExpect(jsonPath("$.preparedSteps.createIssues.executed").value(false));
     }
 
+    /**
+     * Regression case: live repository execution requires admin and remains blocked by default.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void liveRepositoryExecutionRequiresAdminAndRemainsBlockedByDefault() throws Exception {
         String request = """
@@ -100,6 +120,11 @@ class GitHubIntegrationEndpointTests {
                 .andExpect(content().string(not(containsString("token"))));
     }
 
+    /**
+     * Regression case: live Jira execution requires admin and remains blocked by default.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void liveJiraExecutionRequiresAdminAndRemainsBlockedByDefault() throws Exception {
         String request = """

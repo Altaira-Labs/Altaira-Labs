@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * HTTP endpoints for client CRM webhook admin under {@code /api/v1/client-crm/admin/clients/{clientId}/webhook-tokens}.
+ */
 @RestController
 @RequestMapping("/api/v1/client-crm/admin/clients/{clientId}/webhook-tokens")
 @CrossOrigin(origins = {
@@ -19,9 +22,17 @@ import java.util.UUID;
 })
 public class ClientCrmWebhookAdminController {
 
+    /** Admin access operations used by this component. */
     private final AdminAccessService adminAccessService;
+    /** Token operations used by this component. */
     private final ClientCrmWebhookTokenService tokenService;
 
+    /**
+     * Creates the client CRM webhook admin controller with its injected collaborators.
+     *
+     * @param adminAccessService admin access operations used by this component
+     * @param tokenService token operations used by this component
+     */
     public ClientCrmWebhookAdminController(
             AdminAccessService adminAccessService,
             ClientCrmWebhookTokenService tokenService
@@ -30,6 +41,14 @@ public class ClientCrmWebhookAdminController {
         this.tokenService = tokenService;
     }
 
+    /**
+     * GET {@code /api/v1/client-crm/admin/clients/{clientId}/webhook-tokens}. Lists tokens. Internal access is checked before delegation.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return the client CRM webhook token response items
+     */
     @GetMapping
     public List<ClientCrmWebhookTokenResponse> listTokens(
             @PathVariable UUID clientId,
@@ -40,6 +59,15 @@ public class ClientCrmWebhookAdminController {
         return tokenService.listTokens(clientId);
     }
 
+    /**
+     * POST {@code /api/v1/client-crm/admin/clients/{clientId}/webhook-tokens}. Creates token. Internal access is checked before delegation.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param request input carrying create client CRM webhook token
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return the client CRM webhook token response
+     */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ClientCrmWebhookTokenResponse createToken(
@@ -52,6 +80,15 @@ public class ClientCrmWebhookAdminController {
         return tokenService.createToken(clientId, request);
     }
 
+    /**
+     * PATCH {@code /api/v1/client-crm/admin/clients/{clientId}/webhook-tokens/{tokenId}/revoke}. Revokes token. Internal access is checked before delegation.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param tokenId identifier of the token
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return the client CRM webhook token response
+     */
     @PatchMapping("/{tokenId}/revoke")
     public ClientCrmWebhookTokenResponse revokeToken(
             @PathVariable UUID clientId,

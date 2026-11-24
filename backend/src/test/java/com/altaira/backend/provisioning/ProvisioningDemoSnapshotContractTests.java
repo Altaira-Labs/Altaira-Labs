@@ -27,12 +27,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+/** Exercises provisioning demo snapshot contract behavior with JUnit. */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ProvisioningDemoSnapshotContractTests {
 
+    /** Catalog resource used by provisioning demo snapshot contract tests. */
     private static final String CATALOG_RESOURCE = "/provisioning/provisioning-engine-scenarios.json";
+    /** Update property used by provisioning demo snapshot contract tests. */
     private static final String UPDATE_PROPERTY = "provisioning.snapshots.update";
+    /** Snapshot time used by provisioning demo snapshot contract tests. */
     private static final String SNAPSHOT_TIME = "2026-07-21T10:00:00Z";
+    /** Demos used by provisioning demo snapshot contract tests. */
     private static final List<DemoMetadata> DEMOS = List.of(
             new DemoMetadata("DEMO-CLINIC", "iberia-dental", "Clinics"),
             new DemoMetadata("DEMO-DEALER", "hispano-motors", "Car Dealers"),
@@ -40,14 +45,25 @@ class ProvisioningDemoSnapshotContractTests {
             new DemoMetadata("DEMO-SPECIALTY", "asesoria-hispana", "Specialty by Sector")
     );
 
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper = new ObjectMapper()
             .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
+    /** Provider registry. */
     private ProvisioningProviderRegistry providerRegistry;
+    /** Normalizer. */
     private ProvisioningRequirementNormalizer normalizer;
+    /** Engine. */
     private ProvisioningDecisionEngine engine;
+    /** Scenarios. */
     private List<ProvisioningAuditScenario> scenarios;
+    /** Snapshot directory. */
     private Path snapshotDirectory;
 
+    /**
+     * Prepares snapshot harness.
+     *
+     * @throws IOException if the underlying input or output cannot be completed
+     */
     @BeforeAll
     void prepareSnapshotHarness() throws IOException {
         assertNoRemoteDatasource();
@@ -69,6 +85,11 @@ class ProvisioningDemoSnapshotContractTests {
         snapshotDirectory = locateWebRepositoryRoot().resolve("lib/provisioning-demo-snapshots");
     }
 
+    /**
+     * Regression case: visual demo snapshots match the current engine output.
+     *
+     * @throws IOException if the underlying input or output cannot be completed
+     */
     @Test
     void visualDemoSnapshotsMatchTheCurrentEngineOutput() throws IOException {
         boolean update = Boolean.getBoolean(UPDATE_PROPERTY);
@@ -99,6 +120,13 @@ class ProvisioningDemoSnapshotContractTests {
         }
     }
 
+    /**
+     * Builds snapshot.
+     *
+     * @param metadata additional context recorded with the event
+     * @param scenario scenario
+     * @return the demo snapshot
+     */
     private DemoSnapshot buildSnapshot(DemoMetadata metadata, ProvisioningAuditScenario scenario) {
         RequirementSet requirements = normalizer.normalize(
                 scenario.formKey(),
@@ -207,6 +235,12 @@ class ProvisioningDemoSnapshotContractTests {
         );
     }
 
+    /**
+     * Maps track.
+     *
+     * @param track service track within the delivery plan
+     * @return the track snapshot
+     */
     private TrackSnapshot mapTrack(TrackDecision track) {
         return new TrackSnapshot(
                 track.track().name(),
@@ -235,6 +269,12 @@ class ProvisioningDemoSnapshotContractTests {
         );
     }
 
+    /**
+     * Maps shared resource.
+     *
+     * @param resource resource
+     * @return the shared resource snapshot
+     */
     private SharedResourceSnapshot mapSharedResource(SharedResourceDecision resource) {
         return new SharedResourceSnapshot(
                 resource.key(),
@@ -247,6 +287,12 @@ class ProvisioningDemoSnapshotContractTests {
         );
     }
 
+    /**
+     * Loads scenarios. Copies the list before returning it.
+     *
+     * @return the provisioning audit scenario items
+     * @throws IOException if the underlying input or output cannot be completed
+     */
     private List<ProvisioningAuditScenario> loadScenarios() throws IOException {
         try (InputStream input = getClass().getResourceAsStream(CATALOG_RESOURCE)) {
             if (input == null) {
@@ -257,6 +303,7 @@ class ProvisioningDemoSnapshotContractTests {
         }
     }
 
+    /** Performs the assert no remote datasource operation. Uses locale-independent case normalization. */
     private void assertNoRemoteDatasource() {
         for (String key : List.of("DATABASE_URL", "SPRING_DATASOURCE_URL")) {
             String value = System.getenv(key);
@@ -276,6 +323,11 @@ class ProvisioningDemoSnapshotContractTests {
         }
     }
 
+    /**
+     * Finds the project directory that holds the snapshot contract used by the web interface.
+     *
+     * @return the resolved file location
+     */
     private Path locateWebRepositoryRoot() {
         Path current = Path.of("").toAbsolutePath().normalize();
         for (Path candidate = current; candidate != null; candidate = candidate.getParent()) {
@@ -286,17 +338,54 @@ class ProvisioningDemoSnapshotContractTests {
         throw new IllegalStateException("Altaira_Labs_web repository root could not be located from " + current);
     }
 
+    /**
+     * Builds the diagnostic shown when the expected demo snapshot cannot be located.
+     *
+     * @param path path used to locate the target
+     * @return the resulting text
+     */
     private String missingSnapshotMessage(Path path) {
         return "Canonical snapshot is missing: " + path + ". Regenerate with -D" + UPDATE_PROPERTY + "=true.";
     }
 
+    /**
+     * Describes the mismatch between the stored demo snapshot and the computed result.
+     *
+     * @param metadata additional context recorded with the event
+     * @param path path used to locate the target
+     * @return the resulting text
+     */
     private String driftMessage(DemoMetadata metadata, Path path) {
         return "Provisioning visual snapshot drifted for " + metadata.scenarioId() + " (" + path + "). "
                 + "Review the Engine v2 change, then regenerate intentionally with -D" + UPDATE_PROPERTY + "=true.";
     }
 
+    /**
+     * Groups the scenario catalog data used by provisioning demo snapshot contract tests.
+     *
+     * @param version version
+     * @param scenarios scenarios
+     */
     private record ScenarioCatalog(int version, List<ProvisioningAuditScenario> scenarios) {}
+    /**
+     * Groups the demo metadata data used by provisioning demo snapshot contract tests.
+     *
+     * @param scenarioId identifier of the scenario
+     * @param slug slug
+     * @param sector sector
+     */
     private record DemoMetadata(String scenarioId, String slug, String sector) {}
+    /**
+     * Groups the demo snapshot data used by provisioning demo snapshot contract tests.
+     *
+     * @param schemaVersion format version used to interpret this payload
+     * @param scenarioId identifier of the scenario
+     * @param slug slug
+     * @param name name used to identify the item
+     * @param sector sector
+     * @param expectedTracks expected tracks
+     * @param plan proposed or saved delivery plan
+     */
     private record DemoSnapshot(
             int schemaVersion,
             String scenarioId,
@@ -306,6 +395,31 @@ class ProvisioningDemoSnapshotContractTests {
             List<String> expectedTracks,
             PlanSnapshot plan
     ) {}
+    /**
+     * Groups the plan snapshot data used by provisioning demo snapshot contract tests.
+     *
+     * @param id unique identifier of the record
+     * @param leadId identifier of the source sales enquiry
+     * @param assessmentId identifier of the assessment attached to the lead
+     * @param route delivery route selected by the planning policy
+     * @param automationLevel degree of automation associated with the step
+     * @param automationScope automation scope
+     * @param status current state in the workflow
+     * @param dryRun whether the operation is being simulated
+     * @param executionAllowed whether the plan allows an execution step
+     * @param normalizedRequirements normalized requirements
+     * @param decisionReason decision reason
+     * @param costEstimate cost estimate
+     * @param risks concerns to consider before carrying out the plan
+     * @param tools tools included in the delivery decision
+     * @param items items
+     * @param manualSteps work that still requires a person
+     * @param externalResources external resources
+     * @param tracks tracks
+     * @param sharedResources shared resources
+     * @param createdAt time the record was created
+     * @param updatedAt time of the most recent update
+     */
     private record PlanSnapshot(
             String id,
             String leadId,
@@ -329,6 +443,17 @@ class ProvisioningDemoSnapshotContractTests {
             String createdAt,
             String updatedAt
     ) {}
+    /**
+     * Groups the tool snapshot data used by provisioning demo snapshot contract tests.
+     *
+     * @param id unique identifier of the record
+     * @param key key used to identify the item
+     * @param displayName user-facing label
+     * @param selectionState current selection state of the proposed tool
+     * @param automationLevel degree of automation associated with the step
+     * @param required whether the item is required
+     * @param reason explanation of the decision
+     */
     private record ToolSnapshot(
             String id,
             String key,
@@ -338,6 +463,18 @@ class ProvisioningDemoSnapshotContractTests {
             boolean required,
             String reason
     ) {}
+    /**
+     * Groups the plan item snapshot data used by provisioning demo snapshot contract tests.
+     *
+     * @param id unique identifier of the record
+     * @param providerKey key identifying the integration provider
+     * @param resourceType kind of external or internal resource
+     * @param resourceName name assigned to the resource
+     * @param action action being recorded
+     * @param status current state in the workflow
+     * @param required whether the item is required
+     * @param reason explanation of the decision
+     */
     private record PlanItemSnapshot(
             String id,
             String providerKey,
@@ -348,6 +485,16 @@ class ProvisioningDemoSnapshotContractTests {
             boolean required,
             String reason
     ) {}
+    /**
+     * Groups the manual step snapshot data used by provisioning demo snapshot contract tests.
+     *
+     * @param id unique identifier of the record
+     * @param providerKey key identifying the integration provider
+     * @param title short heading shown to a reader
+     * @param reason explanation of the decision
+     * @param required whether the item is required
+     * @param status current state in the workflow
+     */
     private record ManualStepSnapshot(
             String id,
             String providerKey,
@@ -356,6 +503,17 @@ class ProvisioningDemoSnapshotContractTests {
             boolean required,
             String status
     ) {}
+    /**
+     * Groups the external resource snapshot data used by provisioning demo snapshot contract tests.
+     *
+     * @param id unique identifier of the record
+     * @param providerKey key identifying the integration provider
+     * @param resourceType kind of external or internal resource
+     * @param externalResourceId identifier assigned by the external provider
+     * @param externalUrl link to the resource in the external system
+     * @param status current state in the workflow
+     * @param idempotencyKey key used to recognize a repeated operation
+     */
     private record ExternalResourceSnapshot(
             String id,
             String providerKey,
@@ -365,6 +523,21 @@ class ProvisioningDemoSnapshotContractTests {
             String status,
             String idempotencyKey
     ) {}
+    /**
+     * Groups the track snapshot data used by provisioning demo snapshot contract tests.
+     *
+     * @param track service track within the delivery plan
+     * @param route delivery route selected by the planning policy
+     * @param ruleId identifier of the rule behind the decision
+     * @param matchedSignals observations that triggered the planning rule
+     * @param reason explanation of the decision
+     * @param confidence confidence
+     * @param requiresManualDecision requires manual decision
+     * @param automationLevel degree of automation associated with the step
+     * @param tools tools included in the delivery decision
+     * @param manualSteps work that still requires a person
+     * @param risks concerns to consider before carrying out the plan
+     */
     private record TrackSnapshot(
             String track,
             String route,
@@ -378,6 +551,16 @@ class ProvisioningDemoSnapshotContractTests {
             List<DecisionManualStepSnapshot> manualSteps,
             List<String> risks
     ) {}
+    /**
+     * Groups the decision tool snapshot data used by provisioning demo snapshot contract tests.
+     *
+     * @param key key used to identify the item
+     * @param displayName user-facing label
+     * @param selectionState current selection state of the proposed tool
+     * @param automationLevel degree of automation associated with the step
+     * @param required whether the item is required
+     * @param reason explanation of the decision
+     */
     private record DecisionToolSnapshot(
             String key,
             String displayName,
@@ -386,12 +569,31 @@ class ProvisioningDemoSnapshotContractTests {
             boolean required,
             String reason
     ) {}
+    /**
+     * Groups the decision manual step snapshot data used by provisioning demo snapshot contract tests.
+     *
+     * @param providerKey key identifying the integration provider
+     * @param title short heading shown to a reader
+     * @param reason explanation of the decision
+     * @param required whether the item is required
+     */
     private record DecisionManualStepSnapshot(
             String providerKey,
             String title,
             String reason,
             boolean required
     ) {}
+    /**
+     * Groups the shared resource snapshot data used by provisioning demo snapshot contract tests.
+     *
+     * @param key key used to identify the item
+     * @param displayName user-facing label
+     * @param selectionState current selection state of the proposed tool
+     * @param automationLevel degree of automation associated with the step
+     * @param required whether the item is required
+     * @param reason explanation of the decision
+     * @param usedByTracks used by tracks
+     */
     private record SharedResourceSnapshot(
             String key,
             String displayName,

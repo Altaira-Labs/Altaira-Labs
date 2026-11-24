@@ -4,8 +4,10 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Exercises Jira integration exception behavior with JUnit. */
 class JiraIntegrationExceptionTests {
 
+    /** Regression case: redacts credentials and control characters from provider errors. */
     @Test
     void redactsCredentialsAndControlCharactersFromProviderErrors() {
         JiraIntegrationException exception = JiraIntegrationException.safe(

@@ -44,6 +44,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Exercises commercial flow end to end acceptance behavior with JUnit. */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:commercial_acceptance_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
         "altaira.commercial.legacy-direct-conversion-enabled=false",
@@ -59,24 +60,45 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 class CommercialFlowEndToEndAcceptanceTests {
 
+    /** Resend payloads used by commercial flow end to end acceptance tests. */
     private static final List<String> RESEND_PAYLOADS = new CopyOnWriteArrayList<>();
+    /** Resend stub used by commercial flow end to end acceptance tests. */
     private static final HttpServer RESEND_STUB = startResendStub();
 
+    /** Assessment operations used by this component. */
     @Autowired private LeadAssessmentService assessmentService;
+    /** Plan operations used by this component. */
     @Autowired private ProvisioningPlanService planService;
+    /** Commercial flow operations used by this component. */
     @Autowired private CommercialFlowService commercialFlowService;
+    /** Persistence access for lead. */
     @Autowired private LeadRepository leadRepository;
+    /** Persistence access for client. */
     @Autowired private ClientRepository clientRepository;
+    /** Persistence access for workspace. */
     @Autowired private ClientWorkspaceRepository workspaceRepository;
+    /** Persistence access for client service. */
     @Autowired private ClientServiceRepository clientServiceRepository;
+    /** Persistence access for client project. */
     @Autowired private ClientProjectRepository clientProjectRepository;
+    /** Persistence access for invitation. */
     @Autowired private ClientInvitationRepository invitationRepository;
+    /** Persistence access for email log. */
     @Autowired private CommercialEmailLogRepository emailLogRepository;
+    /** Persistence access for plan. */
     @Autowired private ProvisioningPlanRepository planRepository;
+    /** Persistence access for run. */
     @Autowired private ProvisioningRunRepository runRepository;
+    /** Persistence access for step. */
     @Autowired private ProvisioningStepRepository stepRepository;
+    /** Jackson mapper used to read or write JSON. */
     @Autowired private ObjectMapper objectMapper;
 
+    /**
+     * Points mail delivery at the acceptance test’s provider stub.
+     *
+     * @param registry registry
+     */
     @DynamicPropertySource
     static void emailProperties(DynamicPropertyRegistry registry) {
         String apiUrl = "http://localhost:" + RESEND_STUB.getAddress().getPort() + "/emails";
@@ -90,16 +112,23 @@ class CommercialFlowEndToEndAcceptanceTests {
         registry.add("altaira.onboarding.email.from", () -> "onboarding@resend.dev");
     }
 
+    /** Resets stub. */
     @BeforeEach
     void resetStub() {
         RESEND_PAYLOADS.clear();
     }
 
+    /** Performs the stop resend stub operation. */
     @AfterAll
     static void stopResendStub() {
         RESEND_STUB.stop(0);
     }
 
+    /**
+     * Submits a synthetic intake and follows it through payment confirmation, activation and an audited delivery preview using a local mail stub.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     void intakeV2ReachesPaidWorkspaceAndAuditedDryRunProvisioning() throws Exception {
         CreateAdminLeadIntakeRequest intakeRequest = new CreateAdminLeadIntakeRequest();
@@ -191,6 +220,13 @@ class CommercialFlowEndToEndAcceptanceTests {
                 );
     }
 
+    /**
+     * Extracts the subject of a captured test email.
+     *
+     * @param payload data passed across this boundary
+     * @return the resulting text
+     * @throws IllegalStateException when validation reports “Resend test payload could not be read”
+     */
     private String subject(String payload) {
         try {
             return objectMapper.readTree(payload).path("subject").asText();
@@ -199,6 +235,11 @@ class CommercialFlowEndToEndAcceptanceTests {
         }
     }
 
+    /**
+     * Starts resend stub.
+     *
+     * @return the http server
+     */
     private static HttpServer startResendStub() {
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

@@ -77,6 +77,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Exercises backend application behavior with JUnit. Individual cases include {@code contextLoads} and {@code clientCanSubmitWrittenSignatureAndAdminCanApproveOnboardingTask}.
+ */
 @SpringBootTest(properties = {
 		"altaira.contact.email.timeout-ms=250",
 		"altaira.rate-limit.leads.capacity=100",
@@ -89,10 +92,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class BackendApplicationTests {
 
+	/** Internal token used by backend application tests. */
 	private static final String INTERNAL_TOKEN = "test-internal-token";
+	/** Google token info server used by backend application tests. */
 	private static final MockGoogleTokenInfoServer GOOGLE_TOKEN_INFO_SERVER = MockGoogleTokenInfoServer.start();
+	/** Client CRM alert email server used by backend application tests. */
 	private static final MockResendEmailServer CLIENT_CRM_ALERT_EMAIL_SERVER = MockResendEmailServer.start();
 
+	/**
+	 * Supplies the test identity response used by the Google sign-in exchange.
+	 *
+	 * @param registry registry
+	 */
 	@DynamicPropertySource
 	static void configureGoogleTokenInfo(DynamicPropertyRegistry registry) {
 		registry.add("altaira.client.google.client-id", () -> "test-google-client-id");
@@ -104,102 +115,135 @@ class BackendApplicationTests {
 		registry.add("altaira.client-crm.alerts.dashboard-url", () -> "https://altaira.test/client/dashboard?lead={leadId}&client={clientId}");
 	}
 
+	/** Mock mvc. */
 	@Autowired
 	private MockMvc mockMvc;
 
+	/** Persistence access for lead. */
 	@Autowired
 	private LeadRepository leadRepository;
 
+	/** Persistence access for lead assessment. */
 	@Autowired
 	private LeadAssessmentRepository leadAssessmentRepository;
 
+	/** Persistence access for provisioning plan. */
 	@Autowired
 	private ProvisioningPlanRepository provisioningPlanRepository;
 
+	/** Persistence access for provisioning plan item. */
 	@Autowired
 	private ProvisioningPlanItemRepository provisioningPlanItemRepository;
 
+	/** Persistence access for provisioning selected tool. */
 	@Autowired
 	private ProvisioningSelectedToolRepository provisioningSelectedToolRepository;
 
+	/** Persistence access for provisioning manual step. */
 	@Autowired
 	private ProvisioningManualStepRepository provisioningManualStepRepository;
 
+	/** Persistence access for provisioning external resource. */
 	@Autowired
 	private ProvisioningExternalResourceRepository provisioningExternalResourceRepository;
 
+	/** Persistence access for app user. */
 	@Autowired
 	private AppUserRepository appUserRepository;
 
+	/** Persistence access for app user session. */
 	@Autowired
 	private AppUserSessionRepository appUserSessionRepository;
 
+	/** Persistence access for security event. */
 	@Autowired
 	private SecurityEventRepository securityEventRepository;
 
+	/** Persistence access for client. */
 	@Autowired
 	private ClientRepository clientRepository;
 
+	/** Persistence access for client CRM lead. */
 	@Autowired
 	private ClientCrmLeadRepository clientCrmLeadRepository;
 
+	/** Persistence access for client CRM follow up action. */
 	@Autowired
 	private ClientCrmFollowUpActionRepository clientCrmFollowUpActionRepository;
 
+	/** Persistence access for client CRM lead event. */
 	@Autowired
 	private ClientCrmLeadEventRepository clientCrmLeadEventRepository;
 
+	/** Persistence access for client CRM lead note. */
 	@Autowired
 	private ClientCrmLeadNoteRepository clientCrmLeadNoteRepository;
 
+	/** Persistence access for client CRM webhook token. */
 	@Autowired
 	private ClientCrmWebhookTokenRepository clientCrmWebhookTokenRepository;
 
+	/** Persistence access for client invitation. */
 	@Autowired
 	private ClientInvitationRepository clientInvitationRepository;
 
+	/** Persistence access for service. */
 	@Autowired
 	private ServiceRepository serviceRepository;
 
+	/** Persistence access for client service. */
 	@Autowired
 	private ClientServiceRepository clientServiceRepository;
 
+	/** Persistence access for client project. */
 	@Autowired
 	private ClientProjectRepository clientProjectRepository;
 
+	/** Persistence access for client project asset. */
 	@Autowired
 	private ClientProjectAssetRepository clientProjectAssetRepository;
 
+	/** Persistence access for client user access. */
 	@Autowired
 	private ClientUserAccessRepository clientUserAccessRepository;
 
+	/** Persistence access for client workspace. */
 	@Autowired
 	private ClientWorkspaceRepository clientWorkspaceRepository;
 
+	/** Persistence access for workspace task. */
 	@Autowired
 	private WorkspaceTaskRepository workspaceTaskRepository;
 
+	/** Persistence access for onboarding task. */
 	@Autowired
 	private OnboardingTaskRepository onboardingTaskRepository;
 
+	/** Persistence access for onboarding file. */
 	@Autowired
 	private OnboardingFileRepository onboardingFileRepository;
 
+	/** Persistence access for onboarding audit log. */
 	@Autowired
 	private OnboardingAuditLogRepository onboardingAuditLogRepository;
 
+	/** Persistence access for internal note. */
 	@Autowired
 	private InternalNoteRepository internalNoteRepository;
 
+	/** Jackson mapper used to read or write JSON. */
 	@Autowired
 	private ObjectMapper objectMapper;
 
+	/** Encoder used to compare or store credential hashes. */
 	@Autowired
 	private PasswordEncoder passwordEncoder;
 
+	/** Mail sender. */
 	@MockitoBean
 	private JavaMailSender mailSender;
 
+	/** Resets database. Persists changes through {@code leadRepository}. */
 	@BeforeEach
 	void resetDatabase() {
 		Mockito.reset(mailSender);
@@ -232,10 +276,16 @@ class BackendApplicationTests {
 		leadRepository.deleteAll();
 	}
 
+	/** Regression case: context loads. */
 	@Test
 	void contextLoads() {
 	}
 
+	/**
+	 * Regression case: creates lead without internal token.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void createsLeadWithoutInternalToken() throws Exception {
 		mockMvc.perform(post("/api/v1/leads")
@@ -261,6 +311,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$.status").value("new"));
 	}
 
+	/**
+	 * Regression case: creates admin lead intake with deterministic recommendation.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void createsAdminLeadIntakeWithDeterministicRecommendation() throws Exception {
 		mockMvc.perform(post("/api/v1/leads/admin-intake")
@@ -292,6 +347,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$.assessment.recommendedServiceKeys.length()").value(2));
 	}
 
+	/**
+	 * Regression case: creates and validates schema v2 admin intake.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void createsAndValidatesSchemaV2AdminIntake() throws Exception {
 		mockMvc.perform(post("/api/v1/leads/admin-intake")
@@ -339,6 +399,11 @@ class BackendApplicationTests {
 				.andExpect(status().isBadRequest());
 	}
 
+	/**
+	 * Regression case: generates idempotent static website provisioning dry run.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void generatesIdempotentStaticWebsiteProvisioningDryRun() throws Exception {
 		String intakeJson = mockMvc.perform(post("/api/v1/leads/admin-intake")
@@ -442,6 +507,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(1, provisioningPlanRepository.count());
 	}
 
+	/**
+	 * Regression case: generates custom application provisioning dry run without executing providers.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void generatesCustomApplicationProvisioningDryRunWithoutExecutingProviders() throws Exception {
 		String intakeJson = mockMvc.perform(post("/api/v1/leads/admin-intake")
@@ -503,6 +573,11 @@ class BackendApplicationTests {
 		);
 	}
 
+	/**
+	 * Regression case: generates sector aligned clinic CRM and restaurant booking plans.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void generatesSectorAlignedClinicCrmAndRestaurantBookingPlans() throws Exception {
 		JsonNode clinicIntake = createAdminIntake("""
@@ -560,6 +635,11 @@ class BackendApplicationTests {
 		assertToolState(restaurantPlan, "RESEND", "selected");
 	}
 
+	/**
+	 * Regression case: converts lead idempotently into one client workspace.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void convertsLeadIdempotentlyIntoOneClientWorkspace() throws Exception {
 		String intakeJson = mockMvc.perform(post("/api/v1/leads/admin-intake")
@@ -625,6 +705,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(1, clientWorkspaceRepository.count());
 	}
 
+	/**
+	 * Regression case: sends email notification with full public contact context.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void sendsEmailNotificationWithFullPublicContactContext() throws Exception {
 		mockMvc.perform(post("/api/v1/leads")
@@ -664,6 +749,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertTrue(body.contains("Needs appointment requests and patient follow-up."));
 	}
 
+	/**
+	 * Regression case: saves lead when email notification times out.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void savesLeadWhenEmailNotificationTimesOut() throws Exception {
 		Mockito.doAnswer(invocation -> {
@@ -697,6 +787,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertTrue(leadRepository.findById(leadId).isPresent());
 	}
 
+	/**
+	 * Regression case: reports email authentication failure without losing lead.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void reportsEmailAuthenticationFailureWithoutLosingLead() throws Exception {
 		Mockito.doThrow(new MailAuthenticationException("Bad credentials"))
@@ -729,6 +824,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertTrue(leadRepository.findById(leadId).isPresent());
 	}
 
+	/**
+	 * Regression case: rejects invalid public lead request.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void rejectsInvalidPublicLeadRequest() throws Exception {
 		mockMvc.perform(post("/api/v1/leads")
@@ -746,6 +846,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$.fields.email").value("Email must be valid"));
 	}
 
+	/**
+	 * Regression case: rejects too short lead identity fields.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void rejectsTooShortLeadIdentityFields() throws Exception {
 		mockMvc.perform(post("/api/v1/leads")
@@ -763,12 +868,22 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$.fields.businessName").value("Business name must be between 2 and 120 characters"));
 	}
 
+	/**
+	 * Regression case: rejects lead listing without internal token.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void rejectsLeadListingWithoutInternalToken() throws Exception {
 		mockMvc.perform(get("/api/v1/leads"))
 				.andExpect(status().isUnauthorized());
 	}
 
+	/**
+	 * Regression case: allows lead listing with internal token.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void allowsLeadListingWithInternalToken() throws Exception {
 		createLead("Grace Hopper", "Compiler Co", "grace@example.com");
@@ -779,6 +894,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$[0].fullName").value("Grace Hopper"));
 	}
 
+	/**
+	 * Regression case: returns lead detail with internal token.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void returnsLeadDetailWithInternalToken() throws Exception {
 		String leadId = createLead("Katherine Johnson", "Orbital Math", "katherine@example.com");
@@ -790,12 +910,22 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$.status").value("new"));
 	}
 
+	/**
+	 * Regression case: rejects email diagnostics without admin access.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void rejectsEmailDiagnosticsWithoutAdminAccess() throws Exception {
 		mockMvc.perform(get("/api/v1/diagnostics/email"))
 				.andExpect(status().isUnauthorized());
 	}
 
+	/**
+	 * Regression case: returns safe email diagnostics with internal token.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void returnsSafeEmailDiagnosticsWithInternalToken() throws Exception {
 		mockMvc.perform(get("/api/v1/diagnostics/email")
@@ -815,6 +945,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$.smtpPassword").doesNotExist());
 	}
 
+	/**
+	 * Regression case: updates lead status with internal token.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void updatesLeadStatusWithInternalToken() throws Exception {
 		String leadId = createLead("Mary Jackson", "Engineering Lab", "mary@example.com");
@@ -827,6 +962,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$.status").value("contacted"));
 	}
 
+	/**
+	 * Regression case: rejects invalid lead status.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void rejectsInvalidLeadStatus() throws Exception {
 		String response = mockMvc.perform(post("/api/v1/leads")
@@ -854,6 +994,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$.error").value("Invalid lead status"));
 	}
 
+	/**
+	 * Regression case: returns not found for missing lead.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void returnsNotFoundForMissingLead() throws Exception {
 		String missingLeadId = UUID.randomUUID().toString();
@@ -864,12 +1009,22 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$.error").value("Lead not found"));
 	}
 
+	/**
+	 * Regression case: rejects client listing without internal token.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void rejectsClientListingWithoutInternalToken() throws Exception {
 		mockMvc.perform(get("/api/v1/clients"))
 				.andExpect(status().isUnauthorized());
 	}
 
+	/**
+	 * Regression case: logs in demo admin with bcrypt password and creates hashed session.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void logsInDemoAdminWithBcryptPasswordAndCreatesHashedSession() throws Exception {
 		String response = mockMvc.perform(post("/api/v1/auth/login")
@@ -900,6 +1055,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(1, securityEventRepository.countByEventType("login_success"));
 	}
 
+	/**
+	 * Regression case: rejects invalid demo admin login and stores failed login event.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void rejectsInvalidDemoAdminLoginAndStoresFailedLoginEvent() throws Exception {
 		mockMvc.perform(post("/api/v1/auth/login")
@@ -916,12 +1076,22 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(1, securityEventRepository.countByEventType("login_failed"));
 	}
 
+	/**
+	 * Regression case: blocks current user endpoint without session.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void blocksCurrentUserEndpointWithoutSession() throws Exception {
 		mockMvc.perform(get("/api/v1/auth/me"))
 				.andExpect(status().isUnauthorized());
 	}
 
+	/**
+	 * Regression case: allows admin endpoint with valid session token.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void allowsAdminEndpointWithValidSessionToken() throws Exception {
 		createLead("Session Admin", "Session Co", "session-admin@example.com");
@@ -933,6 +1103,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$[0].fullName").value("Session Admin"));
 	}
 
+	/**
+	 * Regression case: rejects tampered session token.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void rejectsTamperedSessionToken() throws Exception {
 		String sessionToken = loginAndReturnSessionToken();
@@ -942,6 +1117,11 @@ class BackendApplicationTests {
 				.andExpect(status().isUnauthorized());
 	}
 
+	/**
+	 * Regression case: rejects expired session token.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void rejectsExpiredSessionToken() throws Exception {
 		String sessionToken = loginAndReturnSessionToken();
@@ -954,6 +1134,11 @@ class BackendApplicationTests {
 				.andExpect(status().isUnauthorized());
 	}
 
+	/**
+	 * Regression case: revokes previous admin session when logging in again.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void revokesPreviousAdminSessionWhenLoggingInAgain() throws Exception {
 		String firstSessionToken = loginAndReturnSessionToken();
@@ -973,6 +1158,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(1, sessions.stream().filter(session -> session.getRevokedAt() != null).count());
 	}
 
+	/**
+	 * Regression case: role specific login rejects wrong portal without revoking existing client session.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void roleSpecificLoginRejectsWrongPortalWithoutRevokingExistingClientSession() throws Exception {
 		String clientId = createClientWithSector("Role Boundary Client", "Role Boundary Co", "role-boundary@example.com", "custom");
@@ -1024,6 +1214,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(1, appUserSessionRepository.count());
 	}
 
+	/**
+	 * Regression case: creates client with internal token.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void createsClientWithInternalToken() throws Exception {
 		mockMvc.perform(post("/api/v1/clients")
@@ -1045,6 +1240,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$.status").value("active"));
 	}
 
+	/**
+	 * Regression case: creates client from lead idempotently.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void createsClientFromLeadIdempotently() throws Exception {
 		String leadId = createLead("Lead Owner", "Lead Company", "owner@example.com");
@@ -1072,6 +1272,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(firstClientId, secondClientId);
 	}
 
+	/**
+	 * Regression case: lists seeded service catalogue with internal token.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void listsSeededServiceCatalogueWithInternalToken() throws Exception {
 		mockMvc.perform(get("/api/v1/services")
@@ -1080,6 +1285,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$[0].id").exists());
 	}
 
+	/**
+	 * Regression case: assigns service to client and updates status.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void assignsServiceToClientAndUpdatesStatus() throws Exception {
 		String clientId = createClient("Service Client", "Service Co", "service-client@example.com");
@@ -1133,6 +1343,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$.status").value("in_progress"));
 	}
 
+	/**
+	 * Regression case: adds notes to lead and client.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void addsNotesToLeadAndClient() throws Exception {
 		String leadId = createLead("Note Lead", "Notes Co", "note-lead@example.com");
@@ -1160,6 +1375,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$[0].content").value("Prepare service proposal."));
 	}
 
+	/**
+	 * Regression case: admin can invite client and client can activate workspace.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void adminCanInviteClientAndClientCanActivateWorkspace() throws Exception {
 		String clientId = createClientWithSector("Invited Client", "Invitation Clinic", "invited-client@example.com", "clinics");
@@ -1241,6 +1461,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(1, securityEventRepository.countByEventType("client_invitation_accepted"));
 	}
 
+	/**
+	 * Regression case: admin portal creates projects for every active client module.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void adminPortalCreatesProjectsForEveryActiveClientModule() throws Exception {
 		String clientId = createClientWithSector("Multi Module Client", "Operations Lab", "operations-lab@example.com", "custom");
@@ -1276,6 +1501,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(4, clientProjectRepository.count());
 	}
 
+	/**
+	 * Regression case: admin project overview returns operational projects and excludes technical fixtures.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void adminProjectOverviewReturnsOperationalProjectsAndExcludesTechnicalFixtures() throws Exception {
 		String operationalClientId = createClientWithSector(
@@ -1314,6 +1544,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$[0].reviewPending").value(false));
 	}
 
+	/**
+	 * Regression case: admin action queue returns only operational work waiting for review.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void adminActionQueueReturnsOnlyOperationalWorkWaitingForReview() throws Exception {
 		String operationalClientId = createClientWithSector(
@@ -1387,6 +1622,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$[?(@.actionType == 'feedback_review')]").exists());
 	}
 
+	/**
+	 * Regression case: workspace tasks are filtered for admin and isolated per client.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void workspaceTasksAreFilteredForAdminAndIsolatedPerClient() throws Exception {
 		String operationalClientId = createClientWithSector(
@@ -1571,6 +1811,11 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$[0].id").value(clientTaskId));
 	}
 
+	/**
+	 * Regression case: admin client summaries use persisted services projects and tasks.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void adminClientSummariesUsePersistedServicesProjectsAndTasks() throws Exception {
 		String clientId = createClientWithSector(
@@ -1637,6 +1882,11 @@ class BackendApplicationTests {
 				.andExpect(status().isUnauthorized());
 	}
 
+	/**
+	 * Regression case: client Google login only works for activated invited client users.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void clientGoogleLoginOnlyWorksForActivatedInvitedClientUsers() throws Exception {
 		String clientId = createClientWithSector("Google Client", "Google Clinic", "google-client@example.com", "clinics");
@@ -1682,6 +1932,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertTrue(securityEventRepository.countByEventType("login_failed") >= 1);
 	}
 
+	/**
+	 * Regression case: client can manage own CRM leads when CRM module is active.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void clientCanManageOwnCrmLeadsWhenCrmModuleIsActive() throws Exception {
 		String clientId = createClientWithSector("Restaurant Owner", "Pipeline Bistro", "pipeline-bistro@example.com", "restaurants");
@@ -1956,6 +2211,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(11, clientCrmLeadEventRepository.count());
 	}
 
+	/**
+	 * Regression case: public CRM webhook creates lead with active token and stops after revocation.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void publicCrmWebhookCreatesLeadWithActiveTokenAndStopsAfterRevocation() throws Exception {
 		String clientId = createClientWithSector("Clinic Owner", "Webhook Dental", "webhook-dental@example.com", "clinics");
@@ -2069,6 +2329,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertNotNull(clientCrmLeadRepository.findById(UUID.fromString(crmLeadId)).orElseThrow());
 	}
 
+	/**
+	 * Regression case: urgent public CRM webhook lead sends owner email alert.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void urgentPublicCrmWebhookLeadSendsOwnerEmailAlert() throws Exception {
 		String clientId = createClientWithSector("Alert Owner", "Alert Dental", "alert-owner@example.com", "clinics");
@@ -2150,6 +2415,11 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertTrue(html.contains("https://altaira.test/client/dashboard?lead=" + crmLeadId + "&amp;client=" + clientId));
 	}
 
+	/**
+	 * Regression case: client can submit written signature and admin can approve onboarding task.
+	 *
+	 * @throws Exception if the operation cannot complete
+	 */
 	@Test
 	void clientCanSubmitWrittenSignatureAndAdminCanApproveOnboardingTask() throws Exception {
 		String clientId = createClientWithSector("Clinic Owner", "Clinic Onboarding Co", "clinic-onboarding@example.com", "clinics");
@@ -2510,6 +2780,15 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertTrue(onboardingAuditLogRepository.count() >= 2);
 	}
 
+	/**
+	 * Creates lead.
+	 *
+	 * @param fullName name as displayed to a person
+	 * @param businessName name used by the business
+	 * @param email contact email address
+	 * @return the resulting text
+	 * @throws Exception if the operation cannot complete
+	 */
 	private String createLead(String fullName, String businessName, String email) throws Exception {
 		String response = mockMvc.perform(post("/api/v1/leads")
 						.contentType(MediaType.APPLICATION_JSON)
@@ -2528,6 +2807,15 @@ class BackendApplicationTests {
 		return objectMapper.readTree(response).get("id").asText();
 	}
 
+	/**
+	 * Creates client.
+	 *
+	 * @param name name used to identify the item
+	 * @param company company
+	 * @param email contact email address
+	 * @return the resulting text
+	 * @throws Exception if the operation cannot complete
+	 */
 	private String createClient(String name, String company, String email) throws Exception {
 		String response = mockMvc.perform(post("/api/v1/clients")
 						.header("X-Internal-API-Token", INTERNAL_TOKEN)
@@ -2547,6 +2835,16 @@ class BackendApplicationTests {
 		return objectMapper.readTree(response).get("id").asText();
 	}
 
+	/**
+	 * Creates client with sector.
+	 *
+	 * @param name name used to identify the item
+	 * @param company company
+	 * @param email contact email address
+	 * @param sectorType sector used to select the intake rules
+	 * @return the resulting text
+	 * @throws Exception if the operation cannot complete
+	 */
 	private String createClientWithSector(String name, String company, String email, String sectorType) throws Exception {
 		String response = mockMvc.perform(post("/api/v1/clients")
 						.header("X-Internal-API-Token", INTERNAL_TOKEN)
@@ -2567,6 +2865,12 @@ class BackendApplicationTests {
 		return objectMapper.readTree(response).get("id").asText();
 	}
 
+	/**
+	 * Signs the fixture user in and extracts the session token for later authenticated requests.
+	 *
+	 * @return the resulting text
+	 * @throws Exception if the operation cannot complete
+	 */
 	private String loginAndReturnSessionToken() throws Exception {
 		String response = mockMvc.perform(post("/api/v1/auth/login")
 						.contentType(MediaType.APPLICATION_JSON)
@@ -2584,6 +2888,14 @@ class BackendApplicationTests {
 		return objectMapper.readTree(response).get("sessionToken").asText();
 	}
 
+	/**
+	 * Signs the fixture user in and extracts the session token for later authenticated requests.
+	 *
+	 * @param username account name used to identify the user
+	 * @param password credential supplied for the account
+	 * @return the resulting text
+	 * @throws Exception if the operation cannot complete
+	 */
 	private String loginAndReturnSessionToken(String username, String password) throws Exception {
 		String response = mockMvc.perform(post("/api/v1/auth/login")
 						.contentType(MediaType.APPLICATION_JSON)
@@ -2601,6 +2913,13 @@ class BackendApplicationTests {
 		return objectMapper.readTree(response).get("sessionToken").asText();
 	}
 
+	/**
+	 * Creates client user access. Persists changes through {@code clientUserAccessRepository}.
+	 *
+	 * @param clientId identifier of the client whose workspace is in scope
+	 * @param username account name used to identify the user
+	 * @param password credential supplied for the account
+	 */
 	private void createClientUserAccess(String clientId, String username, String password) {
 		AppUserEntity user = new AppUserEntity();
 		user.setUsername(username);
@@ -2617,6 +2936,14 @@ class BackendApplicationTests {
 		clientUserAccessRepository.save(access);
 	}
 
+	/**
+	 * Assigns service to client.
+	 *
+	 * @param clientId identifier of the client whose workspace is in scope
+	 * @param serviceName service name
+	 * @param notes free-text notes associated with the item
+	 * @throws Exception if the operation cannot complete
+	 */
 	private void assignServiceToClient(String clientId, String serviceName, String notes) throws Exception {
 		String serviceId = serviceIdByName(serviceName);
 
@@ -2633,6 +2960,13 @@ class BackendApplicationTests {
 				.andExpect(status().isCreated());
 	}
 
+	/**
+	 * Creates admin intake.
+	 *
+	 * @param body request or response content
+	 * @return the JSON node
+	 * @throws Exception if the operation cannot complete
+	 */
 	private JsonNode createAdminIntake(String body) throws Exception {
 		String response = mockMvc.perform(post("/api/v1/leads/admin-intake")
 						.header("X-Internal-API-Token", INTERNAL_TOKEN)
@@ -2645,6 +2979,13 @@ class BackendApplicationTests {
 		return objectMapper.readTree(response);
 	}
 
+	/**
+	 * Generates provisioning dry run.
+	 *
+	 * @param intake intake
+	 * @return the JSON node
+	 * @throws Exception if the operation cannot complete
+	 */
 	private JsonNode generateProvisioningDryRun(JsonNode intake) throws Exception {
 		String leadId = intake.path("lead").path("id").asText();
 		String assessmentId = intake.path("assessment").path("id").asText();
@@ -2661,6 +3002,13 @@ class BackendApplicationTests {
 		return objectMapper.readTree(response);
 	}
 
+	/**
+	 * Checks the selected state of the named tool in the planning response.
+	 *
+	 * @param plan proposed or saved delivery plan
+	 * @param toolKey key identifying the recommended tool
+	 * @param expectedState expected state
+	 */
 	private void assertToolState(JsonNode plan, String toolKey, String expectedState) {
 		for (JsonNode tool : plan.path("tools")) {
 			if (toolKey.equals(tool.path("key").asText())) {
@@ -2671,6 +3019,13 @@ class BackendApplicationTests {
 		throw new AssertionError("Provisioning tool not found: " + toolKey);
 	}
 
+	/**
+	 * Determines whether projects contain key applies.
+	 *
+	 * @param projects projects
+	 * @param projectKey key identifying the project
+	 * @return true when the check succeeds
+	 */
 	private boolean projectsContainKey(JsonNode projects, String projectKey) {
 		for (JsonNode project : projects) {
 			if (projectKey.equals(project.get("projectKey").asText())) {
@@ -2681,6 +3036,13 @@ class BackendApplicationTests {
 		return false;
 	}
 
+	/**
+	 * Finds the project identifier associated with the requested service key.
+	 *
+	 * @param projects projects
+	 * @param projectKey key identifying the project
+	 * @return the resulting text
+	 */
 	private String projectIdByKey(JsonNode projects, String projectKey) {
 		for (JsonNode project : projects) {
 			if (projectKey.equals(project.get("projectKey").asText())) {
@@ -2691,6 +3053,16 @@ class BackendApplicationTests {
 		throw new IllegalStateException("Project not found: " + projectKey);
 	}
 
+	/**
+	 * Submits and approve signature task.
+	 *
+	 * @param dashboard dashboard
+	 * @param taskKey key identifying the task
+	 * @param clientSessionToken session credential supplied for the client workspace
+	 * @param signerName signer name
+	 * @param documentId identifier of the document
+	 * @throws Exception if the operation cannot complete
+	 */
 	private void submitAndApproveSignatureTask(
 			JsonNode dashboard,
 			String taskKey,
@@ -2706,6 +3078,15 @@ class BackendApplicationTests {
 		);
 	}
 
+	/**
+	 * Submits and approve signature task.
+	 *
+	 * @param taskId identifier of the task being acted on
+	 * @param clientSessionToken session credential supplied for the client workspace
+	 * @param signerName signer name
+	 * @param documentId identifier of the document
+	 * @throws Exception if the operation cannot complete
+	 */
 	private void submitAndApproveSignatureTask(
 			String taskId,
 			String clientSessionToken,
@@ -2733,6 +3114,13 @@ class BackendApplicationTests {
 				.andExpect(jsonPath("$.status").value("approved"));
 	}
 
+	/**
+	 * Finds task id by key.
+	 *
+	 * @param dashboard dashboard
+	 * @param taskKey key identifying the task
+	 * @return the resulting text
+	 */
 	private String findTaskIdByKey(JsonNode dashboard, String taskKey) {
 		for (JsonNode task : dashboard.get("tasks")) {
 			if (taskKey.equals(task.get("taskKey").asText())) {
@@ -2743,6 +3131,13 @@ class BackendApplicationTests {
 		throw new IllegalStateException("Task not found: " + taskKey);
 	}
 
+	/**
+	 * Finds task id by type.
+	 *
+	 * @param dashboard dashboard
+	 * @param taskType task type
+	 * @return the resulting text
+	 */
 	private String findTaskIdByType(JsonNode dashboard, String taskType) {
 		for (JsonNode task : dashboard.get("tasks")) {
 			if (taskType.equals(task.get("taskType").asText())) {
@@ -2753,23 +3148,49 @@ class BackendApplicationTests {
 		throw new IllegalStateException("Task type not found: " + taskType);
 	}
 
+	/**
+	 * Reads the first catalogue service identifier from the test response.
+	 *
+	 * @return the resulting text
+	 */
 	private String firstServiceId() {
 		return serviceRepository.findAllByOrderByNameAsc().get(0).getId().toString();
 	}
 
+	/**
+	 * Locates the service identifier through its catalogue name.
+	 *
+	 * @param name name used to identify the item
+	 * @return the resulting text
+	 */
 	private String serviceIdByName(String name) {
 		return serviceRepository.findByNameIgnoreCase(name).orElseThrow().getId().toString();
 	}
 
+	/** Implements mock resend email server behavior for the backend application tests.java package. */
 	private static class MockResendEmailServer {
+		/** Server. */
 		private final HttpServer server;
+		/** Request bodies. */
 		private final List<String> requestBodies = Collections.synchronizedList(new ArrayList<>());
+		/** Authorization headers. */
 		private final List<String> authorizationHeaders = Collections.synchronizedList(new ArrayList<>());
 
+		/**
+		 * Constructs {@code MockResendEmailServer} using the supplied server.
+		 *
+		 * @param server server
+		 */
 		private MockResendEmailServer(HttpServer server) {
 			this.server = server;
 		}
 
+		/**
+		 * Builds the mock resend email server fixture used by the mock resend email server tests.
+		 *
+		 * @return the mock resend email server
+		 * @throws IllegalStateException when validation reports “Could not start mock Resend email server”
+		 */
 		static MockResendEmailServer start() {
 			try {
 				HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -2792,31 +3213,60 @@ class BackendApplicationTests {
 			}
 		}
 
+		/** Performs the clear operation. */
 		void clear() {
 			requestBodies.clear();
 			authorizationHeaders.clear();
 		}
 
+		/**
+		 * Returns the request bodies for this mock resend email server.
+		 *
+		 * @return request bodies
+		 */
 		List<String> requestBodies() {
 			return requestBodies;
 		}
 
+		/**
+		 * Returns the authorization headers for this mock resend email server.
+		 *
+		 * @return authorization headers
+		 */
 		List<String> authorizationHeaders() {
 			return authorizationHeaders;
 		}
 
+		/**
+		 * Builds a URL that targets the locally running test server.
+		 *
+		 * @return the resulting text
+		 */
 		String url() {
 			return "http://127.0.0.1:" + server.getAddress().getPort() + "/emails";
 		}
 	}
 
+	/** Implements mock Google token info server behavior for the backend application tests.java package. */
 	private static class MockGoogleTokenInfoServer {
+		/** Server. */
 		private final HttpServer server;
 
+		/**
+		 * Constructs {@code MockGoogleTokenInfoServer} using the supplied server.
+		 *
+		 * @param server server
+		 */
 		private MockGoogleTokenInfoServer(HttpServer server) {
 			this.server = server;
 		}
 
+		/**
+		 * Builds the mock Google token info server fixture used by the mock Google token info server tests.
+		 *
+		 * @return the mock Google token info server
+		 * @throws IllegalStateException when validation reports “Could not start mock Google tokeninfo server”
+		 */
 		static MockGoogleTokenInfoServer start() {
 			try {
 				HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -2863,6 +3313,11 @@ class BackendApplicationTests {
 			}
 		}
 
+		/**
+		 * Builds a URL that targets the locally running test server.
+		 *
+		 * @return the resulting text
+		 */
 		String url() {
 			return "http://127.0.0.1:" + server.getAddress().getPort() + "/tokeninfo";
 		}

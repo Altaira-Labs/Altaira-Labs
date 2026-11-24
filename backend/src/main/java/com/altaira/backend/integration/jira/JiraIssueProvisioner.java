@@ -18,12 +18,23 @@ import java.util.regex.Pattern;
 @Service
 public class JiraIssueProvisioner {
 
+    /** Safe label used by Jira issue provisioner. */
     private static final Pattern SAFE_LABEL = Pattern.compile("[a-z0-9][a-z0-9-]{0,199}");
 
+    /** Properties. */
     private final JiraProperties properties;
+    /** Api client. */
     private final JiraApiClient apiClient;
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
 
+    /**
+     * Constructs {@code JiraIssueProvisioner} using the supplied properties, api client, object mapper.
+     *
+     * @param properties properties
+     * @param apiClient api client
+     * @param objectMapper Jackson mapper used to read or write JSON
+     */
     public JiraIssueProvisioner(
             JiraProperties properties,
             JiraApiClient apiClient,
@@ -34,6 +45,15 @@ public class JiraIssueProvisioner {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Ensures task.
+     *
+     * @param summary summary
+     * @param description human-readable description
+     * @param labels labels
+     * @param idempotencyLabel idempotency label
+     * @return the Jira issue provisioning result
+     */
     public JiraIssueProvisioningResult ensureTask(
             String summary,
             String description,
@@ -69,6 +89,12 @@ public class JiraIssueProvisioner {
         return validateIssue(created, safeSummary, true, false);
     }
 
+    /**
+     * Finds existing issue.
+     *
+     * @param idempotencyLabel idempotency label
+     * @return the JSON node
+     */
     private JsonNode findExistingIssue(String idempotencyLabel) {
         ObjectNode search = objectMapper.createObjectNode();
         search.put(
@@ -90,6 +116,15 @@ public class JiraIssueProvisioner {
         return issues.get(0);
     }
 
+    /**
+     * Validates issue.
+     *
+     * @param issue issue
+     * @param expectedSummary expected summary
+     * @param created whether a resource was created
+     * @param reused whether an existing resource was used
+     * @return the Jira issue provisioning result
+     */
     private JiraIssueProvisioningResult validateIssue(
             JsonNode issue,
             String expectedSummary,
@@ -111,6 +146,12 @@ public class JiraIssueProvisioner {
         return new JiraIssueProvisioningResult(created, reused, id, key, issueUrl);
     }
 
+    /**
+     * Builds the Jira issue description in Atlassian Document Format.
+     *
+     * @param description human-readable description
+     * @return the object node
+     */
     private ObjectNode adfDescription(String description) {
         ObjectNode document = objectMapper.createObjectNode();
         document.put("type", "doc");
@@ -122,6 +163,7 @@ public class JiraIssueProvisioner {
         return document;
     }
 
+    /** Requires execution gate. */
     private void requireExecutionGate() {
         if (!properties.canMutateResources()) {
             throw JiraIntegrationException.safe(
@@ -133,6 +175,12 @@ public class JiraIssueProvisioner {
         }
     }
 
+    /**
+     * Validates label.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String validateLabel(String value) {
         String label = value == null ? "" : value.trim().toLowerCase();
         if (!SAFE_LABEL.matcher(label).matches()) {
@@ -141,6 +189,14 @@ public class JiraIssueProvisioner {
         return label;
     }
 
+    /**
+     * Requires text.
+     *
+     * @param value stored or supplied representation
+     * @param error error
+     * @param maxLength max length
+     * @return the resulting text
+     */
     private String requireText(String value, String error, int maxLength) {
         String text = value == null ? "" : value.trim();
         if (text.isBlank()) {

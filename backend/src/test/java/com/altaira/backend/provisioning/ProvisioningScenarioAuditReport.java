@@ -12,10 +12,19 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/** Writes the Markdown summary of the synthetic planning scenarios evaluated by the regression suite. */
 final class ProvisioningScenarioAuditReport {
 
+    /** Constructs {@code ProvisioningScenarioAuditReport} with its default state. */
     private ProvisioningScenarioAuditReport() {}
 
+    /**
+     * Creates the report directory and writes the results of the synthetic planning scenarios as Markdown.
+     *
+     * @param reportPath report path
+     * @param unsortedResults unsorted results
+     * @throws IOException if the underlying input or output cannot be completed
+     */
     static void write(Path reportPath, List<ProvisioningScenarioAuditResult> unsortedResults) throws IOException {
         List<ProvisioningScenarioAuditResult> results = unsortedResults.stream()
                 .sorted(Comparator.comparing(result -> result.scenario().id()))
@@ -50,6 +59,12 @@ final class ProvisioningScenarioAuditReport {
         Files.writeString(reportPath, report.toString(), StandardCharsets.UTF_8);
     }
 
+    /**
+     * Appends service summary.
+     *
+     * @param report report
+     * @param results outcomes collected so far
+     */
     private static void appendServiceSummary(StringBuilder report, List<ProvisioningScenarioAuditResult> results) {
         report.append("## 2. Summary by service\n\n")
                 .append("| Service | Total | PASS | MISMATCH |\n")
@@ -68,6 +83,12 @@ final class ProvisioningScenarioAuditReport {
         report.append("\n");
     }
 
+    /**
+     * Appends demo summary.
+     *
+     * @param report report
+     * @param results outcomes collected so far
+     */
     private static void appendDemoSummary(StringBuilder report, List<ProvisioningScenarioAuditResult> results) {
         report.append("## 3. Four priority demos\n\n")
                 .append("All names are fictional and no real business is represented as a client.\n\n")
@@ -84,6 +105,12 @@ final class ProvisioningScenarioAuditReport {
         report.append("\n");
     }
 
+    /**
+     * Appends route failures.
+     *
+     * @param report report
+     * @param results outcomes collected so far
+     */
     private static void appendRouteFailures(StringBuilder report, List<ProvisioningScenarioAuditResult> results) {
         Map<String, Long> failures = results.stream()
                 .filter(result -> !result.scenario().expected().route().equals(result.actualRoute()))
@@ -106,6 +133,12 @@ final class ProvisioningScenarioAuditReport {
         report.append("\n");
     }
 
+    /**
+     * Appends tool deltas.
+     *
+     * @param report report
+     * @param results outcomes collected so far
+     */
     private static void appendToolDeltas(StringBuilder report, List<ProvisioningScenarioAuditResult> results) {
         Map<String, Long> overIncluded = countToolDeltas(results, result -> difference(
                 result.actualIncludedTools(), result.scenario().expected().includedTools()));
@@ -119,6 +152,13 @@ final class ProvisioningScenarioAuditReport {
         appendCountTable(report, "Tool", missing);
     }
 
+    /**
+     * Counts tool deltas.
+     *
+     * @param results outcomes collected so far
+     * @param extractor extractor
+     * @return the resulting key–value pairs
+     */
     private static Map<String, Long> countToolDeltas(
             List<ProvisioningScenarioAuditResult> results,
             Function<ProvisioningScenarioAuditResult, List<String>> extractor
@@ -128,6 +168,12 @@ final class ProvisioningScenarioAuditReport {
                 .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
     }
 
+    /**
+     * Appends missing fields.
+     *
+     * @param report report
+     * @param results outcomes collected so far
+     */
     private static void appendMissingFields(StringBuilder report, List<ProvisioningScenarioAuditResult> results) {
         Map<String, Long> missingFields = results.stream()
                 .flatMap(result -> result.scenario().missingFormFields().stream())
@@ -138,6 +184,12 @@ final class ProvisioningScenarioAuditReport {
         appendCountTable(report, "Field", missingFields);
     }
 
+    /**
+     * Appends engine v2 conclusions.
+     *
+     * @param report report
+     * @param results outcomes collected so far
+     */
     private static void appendEngineV2Conclusions(
             StringBuilder report,
             List<ProvisioningScenarioAuditResult> results
@@ -158,6 +210,12 @@ final class ProvisioningScenarioAuditReport {
                 .append("5. Remaining mismatches identify discovery or policy refinements; they do not execute providers.\n\n");
     }
 
+    /**
+     * Appends details.
+     *
+     * @param report report
+     * @param results outcomes collected so far
+     */
     private static void appendDetails(StringBuilder report, List<ProvisioningScenarioAuditResult> results) {
         report.append("## 8. Scenario details\n\n");
         for (ProvisioningScenarioAuditResult result : results) {
@@ -191,6 +249,13 @@ final class ProvisioningScenarioAuditReport {
         }
     }
 
+    /**
+     * Appends count table.
+     *
+     * @param report report
+     * @param heading heading
+     * @param counts counts
+     */
     private static void appendCountTable(StringBuilder report, String heading, Map<String, Long> counts) {
         report.append("| ").append(heading).append(" | Scenarios |\n")
                 .append("|---|---:|\n");
@@ -205,20 +270,45 @@ final class ProvisioningScenarioAuditReport {
         report.append("\n");
     }
 
+    /**
+     * Lists elements present on one side of the comparison and absent from the other.
+     *
+     * @param left left
+     * @param right right
+     * @return the string items
+     */
     private static List<String> difference(List<String> left, List<String> right) {
         List<String> difference = new ArrayList<>(left);
         difference.removeAll(right);
         return difference;
     }
 
+    /**
+     * Finds the first difference to include in the human-readable regression report.
+     *
+     * @param result outcome carrying provisioning scenario audit
+     * @return the resulting text
+     */
     private static String firstMismatch(ProvisioningScenarioAuditResult result) {
         return result.mismatches().isEmpty() ? "No delta" : result.mismatches().getFirst();
     }
 
+    /**
+     * Escapes special characters before embedding the value in generated markup.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private static String escape(String value) {
         return value.replace("|", "\\|").replace("\n", " ");
     }
 
+    /**
+     * Escapes a report value before displaying it as inline Markdown code.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private static String escapeCode(String value) {
         return value.replace("`", "'").replace("\n", " ");
     }

@@ -17,15 +17,28 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+/** HTTP endpoints for provisioning plan under {@code /api/v1}. */
 @RestController
 @RequestMapping("/api/v1")
 public class ProvisioningPlanController {
 
+    /** Provisioning plan operations used by this component. */
     private final ProvisioningPlanService provisioningPlanService;
+    /** GitHub provisioning execution operations used by this component. */
     private final GitHubProvisioningExecutionService githubProvisioningExecutionService;
+    /** Jira provisioning execution operations used by this component. */
     private final JiraProvisioningExecutionService jiraProvisioningExecutionService;
+    /** Admin access operations used by this component. */
     private final AdminAccessService adminAccessService;
 
+    /**
+     * Creates the provisioning plan controller with its injected collaborators.
+     *
+     * @param provisioningPlanService provisioning plan operations used by this component
+     * @param githubProvisioningExecutionService GitHub provisioning execution operations used by this component
+     * @param jiraProvisioningExecutionService Jira provisioning execution operations used by this component
+     * @param adminAccessService admin access operations used by this component
+     */
     public ProvisioningPlanController(
             ProvisioningPlanService provisioningPlanService,
             GitHubProvisioningExecutionService githubProvisioningExecutionService,
@@ -38,6 +51,15 @@ public class ProvisioningPlanController {
         this.adminAccessService = adminAccessService;
     }
 
+    /**
+     * POST {@code /api/v1/leads/{leadId}/provisioning-plans/dry-run}. Generates dry run. Internal access is checked before delegation.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @param request input carrying create provisioning dry run
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return the provisioning plan response
+     */
     @PostMapping("/leads/{leadId}/provisioning-plans/dry-run")
     public ProvisioningPlanResponse generateDryRun(
             @PathVariable UUID leadId,
@@ -49,6 +71,14 @@ public class ProvisioningPlanController {
         return provisioningPlanService.generateDryRun(leadId, request);
     }
 
+    /**
+     * GET {@code /api/v1/leads/{leadId}/provisioning-plans}. Retrieves plans. Internal access is checked before delegation.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return the provisioning plan response items
+     */
     @GetMapping("/leads/{leadId}/provisioning-plans")
     public List<ProvisioningPlanResponse> getPlans(
             @PathVariable UUID leadId,
@@ -59,6 +89,14 @@ public class ProvisioningPlanController {
         return provisioningPlanService.getPlansForLead(leadId);
     }
 
+    /**
+     * GET {@code /api/v1/provisioning-plans/{planId}}. Retrieves plan. Internal access is checked before delegation.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return proposed or saved delivery plan
+     */
     @GetMapping("/provisioning-plans/{planId}")
     public ProvisioningPlanResponse getPlan(
             @PathVariable UUID planId,
@@ -69,6 +107,15 @@ public class ProvisioningPlanController {
         return provisioningPlanService.getPlan(planId);
     }
 
+    /**
+     * PATCH {@code /api/v1/provisioning-plans/{planId}/status}. Updates status. Internal access is checked before delegation.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @param request input carrying update provisioning plan status
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return the provisioning plan response
+     */
     @PatchMapping("/provisioning-plans/{planId}/status")
     public ProvisioningPlanResponse updateStatus(
             @PathVariable UUID planId,
@@ -80,6 +127,15 @@ public class ProvisioningPlanController {
         return provisioningPlanService.updateStatus(planId, request.getStatus());
     }
 
+    /**
+     * POST {@code /api/v1/provisioning-plans/{planId}/providers/github/repository}. Executes GitHub repository. Internal access is checked before delegation.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @param request input carrying execute GitHub repository
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return the GitHub repository execution response
+     */
     @PostMapping("/provisioning-plans/{planId}/providers/github/repository")
     public GitHubRepositoryExecutionResponse executeGitHubRepository(
             @PathVariable UUID planId,
@@ -91,6 +147,15 @@ public class ProvisioningPlanController {
         return githubProvisioningExecutionService.executePrivateRepository(planId, request);
     }
 
+    /**
+     * POST {@code /api/v1/provisioning-plans/{planId}/providers/jira/issues}. Executes Jira issues. Internal access is checked before delegation.
+     *
+     * @param planId identifier of the saved provisioning plan
+     * @param request input carrying execute Jira issues
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return the Jira issue execution response
+     */
     @PostMapping("/provisioning-plans/{planId}/providers/jira/issues")
     public JiraIssueExecutionResponse executeJiraIssues(
             @PathVariable UUID planId,

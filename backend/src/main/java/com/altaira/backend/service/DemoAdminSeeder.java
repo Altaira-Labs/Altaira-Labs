@@ -10,19 +10,39 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+/** Creates local demonstration accounts only when the configured seeding conditions allow them. */
 @Component
 public class DemoAdminSeeder implements ApplicationRunner {
 
+    /** Minimum password length ({@code 16}). */
     private static final int MINIMUM_PASSWORD_LENGTH = 16;
 
+    /** Persistence access for app user. */
     private final AppUserRepository appUserRepository;
+    /** Encoder used to compare or store credential hashes. */
     private final PasswordEncoder passwordEncoder;
+    /** Security event operations used by this component. */
     private final SecurityEventService securityEventService;
+    /** Whether the capability is enabled. */
     private final boolean enabled;
+    /** Account name used to identify the user. */
     private final String username;
+    /** Credential supplied for the account. */
     private final String password;
+    /** Role used to determine allowed operations. */
     private final String role;
 
+    /**
+     * Creates the demo admin seeder with its injected collaborators.
+     *
+     * @param appUserRepository persistence access for app user
+     * @param passwordEncoder encoder used to compare or store credential hashes
+     * @param securityEventService security event operations used by this component
+     * @param enabled whether the capability is enabled
+     * @param username account name used to identify the user
+     * @param password credential supplied for the account
+     * @param role role used to determine allowed operations
+     */
     public DemoAdminSeeder(
             AppUserRepository appUserRepository,
             PasswordEncoder passwordEncoder,
@@ -41,6 +61,11 @@ public class DemoAdminSeeder implements ApplicationRunner {
         this.role = role;
     }
 
+    /**
+     * Seeds the configured demonstration users during application startup when demo seeding is enabled.
+     *
+     * @param args command-line arguments passed to the application
+     */
     @Override
     public void run(ApplicationArguments args) {
         if (!enabled) {
@@ -105,6 +130,11 @@ public class DemoAdminSeeder implements ApplicationRunner {
         );
     }
 
+    /**
+     * Validates configuration.
+     *
+     * @throws IllegalStateException when validation reports “Demo admin is enabled but ALTAIRA_DEMO_ADMIN_USERNAME is missing” or “Demo admin is enabled but ALTAIRA_DEMO_ADMIN_PASSWORD is missing”
+     */
     private void validateConfiguration() {
         if (username == null || username.isBlank()) {
             throw new IllegalStateException(

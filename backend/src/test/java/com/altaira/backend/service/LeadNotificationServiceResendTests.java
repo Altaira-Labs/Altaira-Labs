@@ -20,10 +20,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Exercises lead notification service resend behavior with JUnit. Individual cases include {@code sendsResendEmailWithLeadContextAndDoesNotUseSmtpProvider} and {@code reportsMissingResendApiKeyWithoutUsingSmtp}.
+ */
 class LeadNotificationServiceResendTests {
 
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * Regression case: sends resend email with lead context and does not use smtp provider.
+     *
+     * @throws Exception if the operation cannot complete
+     */
     @Test
     @SuppressWarnings("unchecked")
     void sendsResendEmailWithLeadContextAndDoesNotUseSmtpProvider() throws Exception {
@@ -99,6 +108,7 @@ class LeadNotificationServiceResendTests {
         }
     }
 
+    /** Regression case: reports missing resend API key without using smtp. */
     @Test
     @SuppressWarnings("unchecked")
     void reportsMissingResendApiKeyWithoutUsingSmtp() {
@@ -120,6 +130,14 @@ class LeadNotificationServiceResendTests {
         }
     }
 
+    /**
+     * Builds the mail service pointed at the test provider.
+     *
+     * @param mailSenderProvider mail sender provider
+     * @param apiKey key identifying the api
+     * @param apiUrl URL for api
+     * @return the lead notification service
+     */
     private LeadNotificationService resendService(
             ObjectProvider<JavaMailSender> mailSenderProvider,
             String apiKey,
@@ -147,6 +165,11 @@ class LeadNotificationServiceResendTests {
         );
     }
 
+    /**
+     * Creates the sample enquiry used to exercise notifications.
+     *
+     * @return the lead record
+     */
     private LeadEntity testLead() {
         LeadEntity lead = new LeadEntity();
         lead.setId(UUID.fromString("73fb0d01-fdc8-4264-8421-a5192251401c"));

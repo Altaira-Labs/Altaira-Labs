@@ -53,12 +53,22 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * Builds the project, onboarding and resource views that belong to a customer's workspace.
+ * <p>Customer operations resolve workspace membership before selecting records. Staff
+ * can request an administrative preview for a named customer. Keeping these paths separate
+ * lets a consultant review delivery while client operations remain scoped to one account.
+ * <p>Asset operations also verify that the referenced project belongs to the customer
+ * before exposing a download or changing its content.
+ */
 @Service
 @Transactional
 public class ClientPortalService {
 
+    /** External link storage prefix used by client portal service. */
     private static final String EXTERNAL_LINK_STORAGE_PREFIX = "external-link:";
 
+    /** Modules used by client portal service. */
     private static final List<ModuleDefinition> MODULES = List.of(
             new ModuleDefinition("web_seo", "Web & SEO", "Project status, content handoff, staging and launch readiness."),
             new ModuleDefinition("crm", "CRM / Lead Management", "Lead pipeline, follow-up records and sector-specific client fields."),
@@ -67,18 +77,44 @@ public class ClientPortalService {
             new ModuleDefinition("dashboard", "Management Dashboard", "Business KPIs and operational analytics for decisions.")
     );
 
+    /** Onboarding operations used by this component. */
     private final OnboardingService onboardingService;
+    /** Onboarding template operations used by this component. */
     private final OnboardingTemplateService onboardingTemplateService;
+    /** Client management operations used by this component. */
     private final ClientManagementService clientManagementService;
+    /** Persistence access for client service. */
     private final ClientServiceRepository clientServiceRepository;
+    /** Persistence access for client project. */
     private final ClientProjectRepository clientProjectRepository;
+    /** Persistence access for client project asset. */
     private final ClientProjectAssetRepository clientProjectAssetRepository;
+    /** Persistence access for client project config snapshot. */
     private final ClientProjectConfigSnapshotRepository clientProjectConfigSnapshotRepository;
+    /** Persistence access for onboarding task. */
     private final OnboardingTaskRepository onboardingTaskRepository;
+    /** Onboarding file storage operations used by this component. */
     private final OnboardingFileStorageService onboardingFileStorageService;
+    /** Media upload URL operations used by this component. */
     private final MediaUploadUrlService mediaUploadUrlService;
+    /** Jackson mapper used to read or write JSON. */
     private final ObjectMapper objectMapper;
 
+    /**
+     * Creates the client portal service with its injected collaborators.
+     *
+     * @param onboardingService onboarding operations used by this component
+     * @param onboardingTemplateService onboarding template operations used by this component
+     * @param clientManagementService client management operations used by this component
+     * @param clientServiceRepository persistence access for client service
+     * @param clientProjectRepository persistence access for client project
+     * @param clientProjectAssetRepository persistence access for client project asset
+     * @param clientProjectConfigSnapshotRepository persistence access for client project config snapshot
+     * @param onboardingTaskRepository persistence access for onboarding task
+     * @param onboardingFileStorageService onboarding file storage operations used by this component
+     * @param mediaUploadUrlService media upload URL operations used by this component
+     * @param objectMapper Jackson mapper used to read or write JSON
+     */
     public ClientPortalService(
             OnboardingService onboardingService,
             OnboardingTemplateService onboardingTemplateService,
@@ -105,17 +141,34 @@ public class ClientPortalService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Resolves the signed-in client and assembles the workspace information visible to that customer.
+     *
+     * @param context context carrying client access
+     * @return portal
+     */
     public ClientPortalResponse getPortal(ClientAccessContext context) {
         OnboardingDashboardResponse onboarding = onboardingService.getClientDashboard(context);
         return buildPortal(context.client(), onboarding);
     }
 
+    /**
+     * Builds a staff-facing view of the selected customer’s portal for review.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @return portal for admin
+     */
     public ClientPortalResponse getPortalForAdmin(UUID clientId) {
         OnboardingDashboardResponse onboarding = onboardingService.getAdminDashboard(clientId);
         ClientEntity client = clientManagementService.findClientEntity(clientId);
         return buildPortal(client, onboarding);
     }
 
+    /**
+     * Lists projects as admin.
+     *
+     * @return the admin client project summary response items
+     */
     @Transactional(readOnly = true)
     public List<AdminClientProjectSummaryResponse> listProjectsAsAdmin() {
         return clientProjectRepository.findAllByOrderByUpdatedAtDesc()
@@ -125,6 +178,11 @@ public class ClientPortalService {
                 .toList();
     }
 
+    /**
+     * Lists action items as admin.
+     *
+     * @return the admin action item response items
+     */
     @Transactional(readOnly = true)
     public List<AdminActionItemResponse> listActionItemsAsAdmin() {
         List<AdminActionItemResponse> actions = new ArrayList<>();
@@ -160,6 +218,13 @@ public class ClientPortalService {
                 .toList();
     }
 
+    /**
+     * Updates project as admin. Persists changes through {@code clientProjectRepository}.
+     *
+     * @param projectId identifier of the client project
+     * @param request input carrying update client project
+     * @return the client project response
+     */
     public ClientProjectResponse updateProjectAsAdmin(UUID projectId, UpdateClientProjectRequest request) {
         ClientProjectEntity project = findProject(projectId);
 
@@ -184,6 +249,14 @@ public class ClientPortalService {
         return mapProject(clientProjectRepository.save(project));
     }
 
+    /**
+     * Lists project assets.
+     *
+     * @param context context carrying client access
+     * @param projectId identifier of the client project
+     * @return the client project asset response items
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (locked)
+     */
     public List<ClientProjectAssetResponse> listProjectAssets(
             ClientAccessContext context,
             UUID projectId
@@ -206,6 +279,18 @@ public class ClientPortalService {
                 .toList();
     }
 
+    /**
+     * Uploads project assets. Persists changes through {@code clientProjectAssetRepository}.
+     *
+     * @param context context carrying client access
+     * @param projectId identifier of the client project
+     * @param files files
+     * @param assetType asset type
+     * @param notes free-text notes associated with the item
+     * @return the client project asset response items
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (locked)
+     * @throws IllegalArgumentException when validation reports “At least one project asset file is required”
+     */
     public List<ClientProjectAssetResponse> uploadProjectAssets(
             ClientAccessContext context,
             UUID projectId,
@@ -260,6 +345,14 @@ public class ClientPortalService {
         return uploadedAssets;
     }
 
+    /**
+     * Prepares project asset upload.
+     *
+     * @param context context carrying client access
+     * @param projectId identifier of the client project
+     * @param request input carrying prepare private upload
+     * @return the upload URL response
+     */
     public UploadUrlResponse prepareProjectAssetUpload(
             ClientAccessContext context,
             UUID projectId,
@@ -280,6 +373,15 @@ public class ClientPortalService {
         );
     }
 
+    /**
+     * Validates the uploaded project asset and completes its registration in the workspace.
+     *
+     * @param context context carrying client access
+     * @param projectId identifier of the client project
+     * @param request input carrying complete private upload
+     * @return the client project asset response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (conflict)
+     */
     public ClientProjectAssetResponse completeProjectAssetUpload(
             ClientAccessContext context,
             UUID projectId,
@@ -335,6 +437,15 @@ public class ClientPortalService {
         }
     }
 
+    /**
+     * Creates project link. Persists changes through {@code clientProjectAssetRepository}.
+     *
+     * @param context context carrying client access
+     * @param projectId identifier of the client project
+     * @param request input carrying create project link
+     * @return the client project asset response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (locked)
+     */
     public ClientProjectAssetResponse createProjectLink(
             ClientAccessContext context,
             UUID projectId,
@@ -376,6 +487,12 @@ public class ClientPortalService {
         return mapAsset(clientProjectAssetRepository.save(asset));
     }
 
+    /**
+     * Lists project assets as admin.
+     *
+     * @param projectId identifier of the client project
+     * @return the client project asset response items
+     */
     @Transactional(readOnly = true)
     public List<ClientProjectAssetResponse> listProjectAssetsAsAdmin(UUID projectId) {
         ClientProjectEntity project = findProject(projectId);
@@ -385,6 +502,12 @@ public class ClientPortalService {
                 .toList();
     }
 
+    /**
+     * Lists project config snapshots as admin.
+     *
+     * @param projectId identifier of the client project
+     * @return the client project config snapshot response items
+     */
     @Transactional(readOnly = true)
     public List<ClientProjectConfigSnapshotResponse> listProjectConfigSnapshotsAsAdmin(UUID projectId) {
         ClientProjectEntity project = findProject(projectId);
@@ -394,6 +517,14 @@ public class ClientPortalService {
                 .toList();
     }
 
+    /**
+     * Creates project config snapshot as admin. Persists changes through {@code clientProjectConfigSnapshotRepository}.
+     *
+     * @param projectId identifier of the client project
+     * @param request input carrying create client project config snapshot
+     * @param createdByUsername created by username
+     * @return the client project config snapshot response
+     */
     public ClientProjectConfigSnapshotResponse createProjectConfigSnapshotAsAdmin(
             UUID projectId,
             CreateClientProjectConfigSnapshotRequest request,
@@ -414,6 +545,14 @@ public class ClientPortalService {
         return mapConfigSnapshot(clientProjectConfigSnapshotRepository.save(snapshot));
     }
 
+    /**
+     * Retrieves project asset download as admin.
+     *
+     * @param assetId identifier of the asset
+     * @return project asset download as admin
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (bad request)
+     * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
+     */
     @Transactional(readOnly = true)
     public ClientProjectAssetDownload getProjectAssetDownloadAsAdmin(UUID assetId) {
         ClientProjectAssetEntity asset = findAsset(assetId);
@@ -429,6 +568,15 @@ public class ClientPortalService {
         }
     }
 
+    /**
+     * Retrieves project asset download.
+     *
+     * @param context context carrying client access
+     * @param assetId identifier of the asset
+     * @return project asset download
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (forbidden, bad request)
+     * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
+     */
     @Transactional(readOnly = true)
     public ClientProjectAssetDownload getProjectAssetDownload(
             ClientAccessContext context,
@@ -451,6 +599,12 @@ public class ClientPortalService {
         }
     }
 
+    /**
+     * Requires unlocked portal.
+     *
+     * @param context context carrying client access
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (locked)
+     */
     private void requireUnlockedPortal(ClientAccessContext context) {
         OnboardingDashboardResponse onboarding = onboardingService.getClientDashboard(context);
         if (!onboarding.isContractApproved()) {
@@ -461,6 +615,12 @@ public class ClientPortalService {
         }
     }
 
+    /**
+     * Selects the storage folder used by this category of project asset.
+     *
+     * @param assetType asset type
+     * @return the resulting text
+     */
     private String storageFolderForAssetType(String assetType) {
         String normalized = normalizeAssetType(assetType);
         if (normalized.matches(".*(brand|logo|website|content|seo).*")) {
@@ -472,6 +632,12 @@ public class ClientPortalService {
         return "multimedia";
     }
 
+    /**
+     * Approves project asset as admin. Persists changes through {@code clientProjectAssetRepository}.
+     *
+     * @param assetId identifier of the asset
+     * @return the client project asset response
+     */
     public ClientProjectAssetResponse approveProjectAssetAsAdmin(UUID assetId) {
         ClientProjectAssetEntity asset = findAsset(assetId);
         asset.setStatus("approved");
@@ -480,6 +646,13 @@ public class ClientPortalService {
         return mapAsset(clientProjectAssetRepository.save(asset));
     }
 
+    /**
+     * Rejects project asset as admin. Persists changes through {@code clientProjectAssetRepository}.
+     *
+     * @param assetId identifier of the asset
+     * @param request input carrying review project asset
+     * @return the client project asset response
+     */
     public ClientProjectAssetResponse rejectProjectAssetAsAdmin(UUID assetId, ReviewProjectAssetRequest request) {
         ClientProjectAssetEntity asset = findAsset(assetId);
         asset.setStatus("rejected");
@@ -488,6 +661,15 @@ public class ClientPortalService {
         return mapAsset(clientProjectAssetRepository.save(asset));
     }
 
+    /**
+     * Submits project feedback. Persists changes through {@code clientProjectRepository}.
+     *
+     * @param context context carrying client access
+     * @param projectId identifier of the client project
+     * @param request input carrying submit project feedback
+     * @return the client project response
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (locked, forbidden)
+     */
     public ClientProjectResponse submitProjectFeedback(
             ClientAccessContext context,
             UUID projectId,
@@ -515,6 +697,13 @@ public class ClientPortalService {
         return mapProject(clientProjectRepository.save(project));
     }
 
+    /**
+     * Builds portal.
+     *
+     * @param client customer account in scope
+     * @param onboarding onboarding
+     * @return the client portal response
+     */
     private ClientPortalResponse buildPortal(ClientEntity client, OnboardingDashboardResponse onboarding) {
         List<ClientServiceEntity> activeAssignments = clientServiceRepository.findAllByClientOrderByCreatedAtDesc(client)
                 .stream()
@@ -554,11 +743,24 @@ public class ClientPortalService {
         );
     }
 
+    /**
+     * Checks whether this is visible client service.
+     *
+     * @param assignment assignment
+     * @return true if the value is visible client service
+     */
     private boolean isVisibleClientService(ClientServiceEntity assignment) {
         return assignment.getStatus() != null &&
                 !ClientServiceStatus.CANCELLED.value().equals(assignment.getStatus());
     }
 
+    /**
+     * Chooses which service assignment to display when several refer to the same module.
+     *
+     * @param current current
+     * @param candidate candidate
+     * @return the client service record
+     */
     private ClientServiceEntity preferMostRelevantAssignment(ClientServiceEntity current, ClientServiceEntity candidate) {
         if (ClientServiceStatus.IN_PROGRESS.value().equals(candidate.getStatus())) {
             return candidate;
@@ -571,6 +773,12 @@ public class ClientPortalService {
         return current.getCreatedAt().isAfter(candidate.getCreatedAt()) ? current : candidate;
     }
 
+    /**
+     * Ensures module projects. Persists changes through {@code clientProjectRepository}.
+     *
+     * @param client customer account in scope
+     * @param assignmentByModule assignment by module
+     */
     private void ensureModuleProjects(ClientEntity client, Map<String, ClientServiceEntity> assignmentByModule) {
         MODULES.forEach(module -> {
             ClientServiceEntity assignment = assignmentByModule.get(module.moduleKey());
@@ -598,6 +806,13 @@ public class ClientPortalService {
         });
     }
 
+    /**
+     * Maps module.
+     *
+     * @param module module
+     * @param assignment assignment
+     * @return the client portal module response
+     */
     private ClientPortalModuleResponse mapModule(ModuleDefinition module, ClientServiceEntity assignment) {
         boolean active = assignment != null;
 
@@ -613,6 +828,12 @@ public class ClientPortalService {
         );
     }
 
+    /**
+     * Maps project.
+     *
+     * @param project project
+     * @return the client project response
+     */
     private ClientProjectResponse mapProject(ClientProjectEntity project) {
         return new ClientProjectResponse(
                 project.getId(),
@@ -632,6 +853,12 @@ public class ClientPortalService {
         );
     }
 
+    /**
+     * Maps admin project summary.
+     *
+     * @param project project
+     * @return the admin client project summary response
+     */
     private AdminClientProjectSummaryResponse mapAdminProjectSummary(ClientProjectEntity project) {
         ClientEntity client = project.getClient();
         ClientServiceEntity assignment = project.getClientService();
@@ -655,6 +882,12 @@ public class ClientPortalService {
         );
     }
 
+    /**
+     * Maps onboarding action.
+     *
+     * @param task task
+     * @return the admin action item response
+     */
     private AdminActionItemResponse mapOnboardingAction(OnboardingTaskEntity task) {
         ClientServiceEntity assignment = task.getClientService();
 
@@ -676,6 +909,12 @@ public class ClientPortalService {
         );
     }
 
+    /**
+     * Maps resource action.
+     *
+     * @param asset asset
+     * @return the admin action item response
+     */
     private AdminActionItemResponse mapResourceAction(ClientProjectAssetEntity asset) {
         ClientProjectEntity project = asset.getProject();
         ClientServiceEntity assignment = project.getClientService();
@@ -698,6 +937,12 @@ public class ClientPortalService {
         );
     }
 
+    /**
+     * Maps feedback action.
+     *
+     * @param project project
+     * @return the admin action item response
+     */
     private AdminActionItemResponse mapFeedbackAction(ClientProjectEntity project) {
         ClientServiceEntity assignment = project.getClientService();
 
@@ -719,6 +964,12 @@ public class ClientPortalService {
         );
     }
 
+    /**
+     * Checks whether this is technical fixture.
+     *
+     * @param client customer account in scope
+     * @return true if the value is technical fixture
+     */
     private boolean isTechnicalFixture(ClientEntity client) {
         String name = normalizeForFixtureCheck(client.getName());
         String company = normalizeForFixtureCheck(client.getCompany());
@@ -733,26 +984,59 @@ public class ClientPortalService {
                 email.endsWith(".test");
     }
 
+    /**
+     * Normalizes for fixture check. Uses locale-independent case normalization.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String normalizeForFixtureCheck(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * Finds project. Looks up the referenced record by identifier.
+     *
+     * @param projectId identifier of the client project
+     * @return the client project record
+     * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
+     */
     private ClientProjectEntity findProject(UUID projectId) {
         return clientProjectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Client project", projectId));
     }
 
+    /**
+     * Finds asset. Looks up the referenced record by identifier.
+     *
+     * @param assetId identifier of the asset
+     * @return the client project asset record
+     * @throws com.altaira.backend.exception.ResourceNotFoundException if the referenced record cannot be found
+     */
     private ClientProjectAssetEntity findAsset(UUID assetId) {
         return clientProjectAssetRepository.findById(assetId)
                 .orElseThrow(() -> new ResourceNotFoundException("Client project asset", assetId));
     }
 
+    /**
+     * Checks the project’s customer before any client-scoped operation proceeds.
+     *
+     * @param project project
+     * @param client customer account in scope
+     * @throws org.springframework.web.server.ResponseStatusException if a request is rejected (forbidden)
+     */
     private void ensureProjectBelongsToClient(ClientProjectEntity project, ClientEntity client) {
         if (!project.getClient().getId().equals(client.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No access to this client project");
         }
     }
 
+    /**
+     * Normalizes asset type.
+     *
+     * @param assetType asset type
+     * @return the resulting text
+     */
     private String normalizeAssetType(String assetType) {
         String normalized = trimToLimit(assetType, 80);
 
@@ -763,6 +1047,12 @@ public class ClientPortalService {
         return normalized.toLowerCase().replaceAll("[^a-z0-9_-]", "_");
     }
 
+    /**
+     * Maps asset.
+     *
+     * @param asset asset
+     * @return the client project asset response
+     */
     private ClientProjectAssetResponse mapAsset(ClientProjectAssetEntity asset) {
         return new ClientProjectAssetResponse(
                 asset.getId(),
@@ -782,6 +1072,12 @@ public class ClientPortalService {
         );
     }
 
+    /**
+     * Maps config snapshot.
+     *
+     * @param snapshot snapshot
+     * @return the client project config snapshot response
+     */
     private ClientProjectConfigSnapshotResponse mapConfigSnapshot(ClientProjectConfigSnapshotEntity snapshot) {
         return new ClientProjectConfigSnapshotResponse(
                 snapshot.getId(),
@@ -796,6 +1092,13 @@ public class ClientPortalService {
         );
     }
 
+    /**
+     * Parses config snapshot JSON.
+     *
+     * @param configJson JSON representation of config
+     * @return the value produced by this operation
+     * @throws IllegalArgumentException when validation reports “Configuration snapshot must be a JSON object” or “Configuration snapshot must be valid JSON”
+     */
     private com.fasterxml.jackson.databind.JsonNode parseConfigSnapshotJson(String configJson) {
         try {
             var jsonNode = objectMapper.readTree(configJson);
@@ -810,6 +1113,13 @@ public class ClientPortalService {
         }
     }
 
+    /**
+     * Normalizes external URL.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     * @throws IllegalArgumentException when validation reports “Project link must be a valid http or https URL”
+     */
     private String normalizeExternalUrl(String value) {
         String safeUrl = trimToLimit(value, 500);
 
@@ -828,10 +1138,22 @@ public class ClientPortalService {
         }
     }
 
+    /**
+     * Checks whether this is external link.
+     *
+     * @param asset asset
+     * @return true if the value is external link
+     */
     private boolean isExternalLink(ClientProjectAssetEntity asset) {
         return asset.getStorageKey() != null && asset.getStorageKey().startsWith(EXTERNAL_LINK_STORAGE_PREFIX);
     }
 
+    /**
+     * Reads the external link associated with the project asset.
+     *
+     * @param asset asset
+     * @return the resulting text
+     */
     private String externalUrl(ClientProjectAssetEntity asset) {
         if (!isExternalLink(asset)) {
             return null;
@@ -842,6 +1164,12 @@ public class ClientPortalService {
         return separatorIndex >= 0 ? value.substring(separatorIndex + 1) : value;
     }
 
+    /**
+     * Trims surrounding whitespace. Absent values return null.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String trimToNull(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -850,6 +1178,13 @@ public class ClientPortalService {
         return value.trim();
     }
 
+    /**
+     * Trims surrounding whitespace and caps the result at the supplied length. Absent values use an empty string.
+     *
+     * @param value stored or supplied representation
+     * @param maxLength max length
+     * @return the resulting text
+     */
     private String trimToLimit(String value, int maxLength) {
         if (value == null) {
             return "";
@@ -859,7 +1194,20 @@ public class ClientPortalService {
         return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength);
     }
 
+    /**
+     * Groups the client project asset download data used by client portal service.
+     *
+     * @param asset asset
+     * @param inputStream input stream
+     */
     public record ClientProjectAssetDownload(ClientProjectAssetEntity asset, InputStream inputStream) {}
 
+    /**
+     * Groups the module definition data used by client portal service.
+     *
+     * @param moduleKey key identifying the module
+     * @param title short heading shown to a reader
+     * @param description human-readable description
+     */
     private record ModuleDefinition(String moduleKey, String title, String description) {}
 }

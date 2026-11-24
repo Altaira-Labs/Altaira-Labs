@@ -5,6 +5,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * Bundles the normalized requirements, discovery answers and commercial selections considered by a planning rule.
+ *
+ * @param requirements requirements
+ * @param formKey key selecting the discovery questionnaire
+ * @param responses answers supplied in the discovery questionnaire
+ * @param recommendedServices catalogue services proposed after discovery
+ * @param businessName name used by the business
+ */
 public record ProvisioningDecisionContext(
         RequirementSet requirements,
         String formKey,
@@ -12,6 +21,15 @@ public record ProvisioningDecisionContext(
         List<String> recommendedServices,
         String businessName
 ) {
+    /**
+     * Constructs {@code ProvisioningDecisionContext} using the supplied requirements, form key, responses and remaining fields.
+     *
+     * @param requirements requirements
+     * @param formKey key selecting the discovery questionnaire
+     * @param responses answers supplied in the discovery questionnaire
+     * @param recommendedServices catalogue services proposed after discovery
+     * @param businessName name used by the business
+     */
     public ProvisioningDecisionContext {
         formKey = normalize(formKey);
         responses = responses == null ? Map.of() : Map.copyOf(responses);
@@ -21,14 +39,31 @@ public record ProvisioningDecisionContext(
         businessName = businessName == null || businessName.isBlank() ? "Client" : businessName.trim();
     }
 
+    /**
+     * Checks whether this is general.
+     *
+     * @return true if the value is general
+     */
     public boolean isGeneral() {
         return "general".equals(formKey);
     }
 
+    /**
+     * Determines whether recommends applies.
+     *
+     * @param track service track within the delivery plan
+     * @return true when the check succeeds
+     */
     public boolean recommends(ProvisioningTrack track) {
         return recommendedServices.contains(track.serviceKey());
     }
 
+    /**
+     * Looks up alternative discovery keys in order, joining and normalizing collection answers when present.
+     *
+     * @param keys keys
+     * @return the resulting text
+     */
     public String value(String... keys) {
         for (String key : keys) {
             Object raw = responses.get(key);
@@ -52,6 +87,13 @@ public record ProvisioningDecisionContext(
         return "";
     }
 
+    /**
+     * Determines whether equals any applies.
+     *
+     * @param key key used to identify the item
+     * @param candidates candidates
+     * @return true when the check succeeds
+     */
     public boolean equalsAny(String key, String... candidates) {
         String actual = value(key);
         for (String candidate : candidates) {
@@ -62,6 +104,13 @@ public record ProvisioningDecisionContext(
         return false;
     }
 
+    /**
+     * Determines whether contains applies.
+     *
+     * @param key key used to identify the item
+     * @param fragments fragments
+     * @return true when the check succeeds
+     */
     public boolean contains(String key, String... fragments) {
         String actual = value(key);
         for (String fragment : fragments) {
@@ -72,6 +121,12 @@ public record ProvisioningDecisionContext(
         return false;
     }
 
+    /**
+     * Determines whether yes applies.
+     *
+     * @param keys keys
+     * @return true when the check succeeds
+     */
     public boolean yes(String... keys) {
         for (String key : keys) {
             if (equalsAny(key, "yes", "true", "required", "enabled")) {
@@ -81,11 +136,23 @@ public record ProvisioningDecisionContext(
         return false;
     }
 
+    /**
+     * Reads digits from the discovery value and uses zero when it contains none.
+     *
+     * @param key key used to identify the item
+     * @return the value produced by this operation
+     */
     public int integer(String key) {
         String digits = value(key).replaceAll("[^0-9]", "");
         return digits.isBlank() ? 0 : Integer.parseInt(digits);
     }
 
+    /**
+     * Trims whitespace and lowercases the value for comparison, using an empty string for missing input. Uses locale-independent case normalization.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private static String normalize(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }

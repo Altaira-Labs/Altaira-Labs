@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+/** HTTP endpoints for client service under {@code /api/v1/client-services}. */
 @RestController
 @RequestMapping("/api/v1/client-services")
 @CrossOrigin(origins = {
@@ -17,9 +18,17 @@ import java.util.UUID;
 })
 public class ClientServiceController {
 
+    /** Client service assignment operations used by this component. */
     private final ClientServiceAssignmentService clientServiceAssignmentService;
+    /** Admin access operations used by this component. */
     private final AdminAccessService adminAccessService;
 
+    /**
+     * Creates the client service controller with its injected collaborators.
+     *
+     * @param clientServiceAssignmentService client service assignment operations used by this component
+     * @param adminAccessService admin access operations used by this component
+     */
     public ClientServiceController(
             ClientServiceAssignmentService clientServiceAssignmentService,
             AdminAccessService adminAccessService
@@ -28,6 +37,15 @@ public class ClientServiceController {
         this.adminAccessService = adminAccessService;
     }
 
+    /**
+     * PATCH {@code /api/v1/client-services/{id}/status}. Updates status. Internal access is checked before delegation.
+     *
+     * @param id unique identifier of the record
+     * @param request input carrying update client service status
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return the client service response
+     */
     @PatchMapping("/{id}/status")
     public ClientServiceResponse updateStatus(
             @PathVariable UUID id,

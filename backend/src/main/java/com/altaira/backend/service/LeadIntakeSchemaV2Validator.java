@@ -7,14 +7,26 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Checks that the intake document follows the expected version and sector-specific structure before it reaches the decision engine.
+ */
 @Component
 public class LeadIntakeSchemaV2Validator {
 
+    /** Max text length ({@code 4000}). */
     private static final int MAX_TEXT_LENGTH = 4_000;
+    /** Max collection items ({@code 30}). */
     private static final int MAX_COLLECTION_ITEMS = 30;
 
+    /** Yes no unknown used by lead intake schema v2 validator. */
     private static final Set<String> YES_NO_UNKNOWN = Set.of("yes", "no", "unknown");
 
+    /**
+     * Checks shared intake fields first, then applies the validation rules for the selected service form.
+     *
+     * @param formKey key selecting the discovery questionnaire
+     * @param responses answers supplied in the discovery questionnaire
+     */
     public void validate(LeadIntakeFormKey formKey, Map<String, Object> responses) {
         validateSafeValueShapes(responses);
         validateSharedOptions(responses);
@@ -29,6 +41,11 @@ public class LeadIntakeSchemaV2Validator {
         }
     }
 
+    /**
+     * Validates general.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     */
     private void validateGeneral(Map<String, Object> responses) {
         require(responses, "primaryGoal", "onlinePresence", "bookingProcess", "leadProcess", "repetitiveWork", "reporting");
         option(responses, "primaryGoal", Set.of("online_presence", "bookings", "lead_management", "automation", "visibility"));
@@ -39,6 +56,11 @@ public class LeadIntakeSchemaV2Validator {
         option(responses, "reporting", Set.of("none", "manual", "dashboard"));
     }
 
+    /**
+     * Validates web.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     */
     private void validateWeb(Map<String, Object> responses) {
         require(responses, "websiteState", "solutionShape", "contentManagement", "authentication", "dataPersistence",
                 "payments", "externalIntegrations", "coreOffer", "targetLocations", "contentReady");
@@ -51,6 +73,11 @@ public class LeadIntakeSchemaV2Validator {
         optionIfPresent(responses, "maintenanceOwner", Set.of("client", "altaira", "shared", "unknown"));
     }
 
+    /**
+     * Validates booking.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     */
     private void validateBooking(Map<String, Object> responses) {
         require(responses, "bookingType", "currentBookingProcess", "openingHours", "resources", "slotDuration", "depositRequired");
         option(responses, "currentBookingProcess", Set.of("calls_messages", "calendar", "existing_tool"));
@@ -60,6 +87,11 @@ public class LeadIntakeSchemaV2Validator {
         optionIfPresent(responses, "calendarProvider", Set.of("google", "microsoft", "calcom", "other", "none"));
     }
 
+    /**
+     * Validates CRM.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     */
     private void validateCrm(Map<String, Object> responses) {
         require(responses, "currentLeadProcess", "leadSources", "requiredFields", "importRequired");
         option(responses, "currentLeadProcess", Set.of("messages_email", "spreadsheet", "existing_crm"));
@@ -71,6 +103,11 @@ public class LeadIntakeSchemaV2Validator {
         optionIfPresent(responses, "keepOrReplace", Set.of("keep_integrate", "reconfigure", "replace", "unknown"));
     }
 
+    /**
+     * Validates automation.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     */
     private void validateAutomation(Map<String, Object> responses) {
         require(responses, "currentProcess", "trigger", "expectedAction", "failureHandling");
         yesNoUnknownIfPresent(responses, "approvalWorkflow");
@@ -78,6 +115,11 @@ public class LeadIntakeSchemaV2Validator {
         integerIfPresent(responses, "monthlyVolume", 0, 10_000_000);
     }
 
+    /**
+     * Validates dashboard.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     */
     private void validateDashboard(Map<String, Object> responses) {
         require(responses, "decisions", "kpis", "dataSources", "updateFrequency", "users", "currentReporting");
         option(responses, "updateFrequency", Set.of("realtime", "daily", "weekly", "monthly"));
@@ -86,6 +128,11 @@ public class LeadIntakeSchemaV2Validator {
         yesNoUnknownIfPresent(responses, "financialData", "exportRequired");
     }
 
+    /**
+     * Validates shared options.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     */
     private void validateSharedOptions(Map<String, Object> responses) {
         optionIfPresent(responses, "budgetBand", Set.of("under_2500", "2500_5000", "5000_10000", "10000_plus", "unknown"));
         optionIfPresent(responses, "targetTimeline", Set.of("under_1_month", "1_3_months", "3_6_months", "flexible"));
@@ -94,6 +141,11 @@ public class LeadIntakeSchemaV2Validator {
         optionIfPresent(responses, "serviceSelectionConfirmation", Set.of("confirmed", "needs_discovery", "needs_client_confirmation"));
     }
 
+    /**
+     * Validates safe value shapes.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     */
     private void validateSafeValueShapes(Map<String, Object> responses) {
         responses.forEach((key, raw) -> {
             if (raw == null) {
@@ -113,6 +165,12 @@ public class LeadIntakeSchemaV2Validator {
         });
     }
 
+    /**
+     * Validates scalar length.
+     *
+     * @param key key used to identify the item
+     * @param raw value received before parsing or normalization
+     */
     private void validateScalarLength(String key, Object raw) {
         if (!(raw instanceof String || raw instanceof Number || raw instanceof Boolean)) {
             throw new IllegalArgumentException("Assessment field '" + key + "' has an unsupported value type");
@@ -122,6 +180,12 @@ public class LeadIntakeSchemaV2Validator {
         }
     }
 
+    /**
+     * Rejects the submission if a named field has no value.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @param keys keys
+     */
     private void require(Map<String, Object> responses, String... keys) {
         for (String key : keys) {
             if (value(responses, key).isBlank()) {
@@ -130,18 +194,37 @@ public class LeadIntakeSchemaV2Validator {
         }
     }
 
+    /**
+     * Validates the field against the accepted yes, no and unknown answers.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @param keys keys
+     */
     private void yesNoUnknown(Map<String, Object> responses, String... keys) {
         for (String key : keys) {
             option(responses, key, YES_NO_UNKNOWN);
         }
     }
 
+    /**
+     * Checks a supplied optional answer against the yes, no and unknown choices.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @param keys keys
+     */
     private void yesNoUnknownIfPresent(Map<String, Object> responses, String... keys) {
         for (String key : keys) {
             optionIfPresent(responses, key, YES_NO_UNKNOWN);
         }
     }
 
+    /**
+     * Checks the field against its permitted choices.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @param key key used to identify the item
+     * @param allowed whether the action is permitted
+     */
     private void option(Map<String, Object> responses, String key, Set<String> allowed) {
         String actual = value(responses, key);
         if (!allowed.contains(actual)) {
@@ -149,6 +232,13 @@ public class LeadIntakeSchemaV2Validator {
         }
     }
 
+    /**
+     * Validates the choice only when the field has a value.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @param key key used to identify the item
+     * @param allowed whether the action is permitted
+     */
     private void optionIfPresent(Map<String, Object> responses, String key, Set<String> allowed) {
         String actual = value(responses, key);
         if (!actual.isBlank() && !allowed.contains(actual)) {
@@ -156,6 +246,14 @@ public class LeadIntakeSchemaV2Validator {
         }
     }
 
+    /**
+     * Validates an optional numeric discovery answer when supplied.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @param key key used to identify the item
+     * @param min min
+     * @param max max
+     */
     private void integerIfPresent(Map<String, Object> responses, String key, int min, int max) {
         String actual = value(responses, key);
         if (actual.isBlank()) {
@@ -171,6 +269,13 @@ public class LeadIntakeSchemaV2Validator {
         }
     }
 
+    /**
+     * Reads a discovery field as trimmed lowercase text for validation.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @param key key used to identify the item
+     * @return the resulting text
+     */
     private String value(Map<String, Object> responses, String key) {
         Object raw = responses.get(key);
         return raw == null ? "" : String.valueOf(raw).trim().toLowerCase();

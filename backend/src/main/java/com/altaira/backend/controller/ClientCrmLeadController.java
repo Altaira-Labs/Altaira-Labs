@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+/** HTTP endpoints for client CRM lead under {@code /api/v1/client-crm}. */
 @RestController
 @RequestMapping("/api/v1/client-crm")
 @CrossOrigin(origins = {
@@ -24,10 +25,20 @@ import java.util.UUID;
 })
 public class ClientCrmLeadController {
 
+    /** Client access operations used by this component. */
     private final ClientAccessService clientAccessService;
+    /** Admin access operations used by this component. */
     private final AdminAccessService adminAccessService;
+    /** Client CRM lead operations used by this component. */
     private final ClientCrmLeadService clientCrmLeadService;
 
+    /**
+     * Creates the client CRM lead controller with its injected collaborators.
+     *
+     * @param clientAccessService client access operations used by this component
+     * @param adminAccessService admin access operations used by this component
+     * @param clientCrmLeadService client CRM lead operations used by this component
+     */
     public ClientCrmLeadController(
             ClientAccessService clientAccessService,
             AdminAccessService adminAccessService,
@@ -38,6 +49,12 @@ public class ClientCrmLeadController {
         this.clientCrmLeadService = clientCrmLeadService;
     }
 
+    /**
+     * GET {@code /api/v1/client-crm/client/leads}. Lists client leads. Membership is checked before the workspace operation.
+     *
+     * @param clientSessionToken session credential supplied for the client workspace
+     * @return the client CRM lead response items
+     */
     @GetMapping("/client/leads")
     public List<ClientCrmLeadResponse> listClientLeads(
             @RequestHeader(name = "X-Client-Session-Token", required = false) String clientSessionToken
@@ -46,6 +63,13 @@ public class ClientCrmLeadController {
         return clientCrmLeadService.listClientLeads(context);
     }
 
+    /**
+     * GET {@code /api/v1/client-crm/client/leads/{leadId}}. Retrieves client lead. Membership is checked before the workspace operation.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @param clientSessionToken session credential supplied for the client workspace
+     * @return client lead
+     */
     @GetMapping("/client/leads/{leadId}")
     public ClientCrmLeadResponse getClientLead(
             @PathVariable UUID leadId,
@@ -55,6 +79,13 @@ public class ClientCrmLeadController {
         return clientCrmLeadService.getClientLead(context, leadId);
     }
 
+    /**
+     * POST {@code /api/v1/client-crm/client/leads}. Creates client lead. Membership is checked before the workspace operation.
+     *
+     * @param request input carrying create client CRM lead
+     * @param clientSessionToken session credential supplied for the client workspace
+     * @return the client CRM lead response
+     */
     @PostMapping("/client/leads")
     @ResponseStatus(HttpStatus.CREATED)
     public ClientCrmLeadResponse createClientLead(
@@ -66,6 +97,14 @@ public class ClientCrmLeadController {
         return clientCrmLeadService.createClientLead(context, request);
     }
 
+    /**
+     * PATCH {@code /api/v1/client-crm/client/leads/{leadId}/status}. Updates client lead status. Membership is checked before the workspace operation.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @param request input carrying update client CRM lead status
+     * @param clientSessionToken session credential supplied for the client workspace
+     * @return the client CRM lead response
+     */
     @PatchMapping("/client/leads/{leadId}/status")
     public ClientCrmLeadResponse updateClientLeadStatus(
             @PathVariable UUID leadId,
@@ -77,6 +116,14 @@ public class ClientCrmLeadController {
         return clientCrmLeadService.updateClientLeadStatus(context, leadId, request);
     }
 
+    /**
+     * POST {@code /api/v1/client-crm/client/leads/{leadId}/notes}. Adds client lead note. Membership is checked before the workspace operation.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @param request input carrying add client CRM lead note
+     * @param clientSessionToken session credential supplied for the client workspace
+     * @return the client CRM lead response
+     */
     @PostMapping("/client/leads/{leadId}/notes")
     public ClientCrmLeadResponse addClientLeadNote(
             @PathVariable UUID leadId,
@@ -88,6 +135,14 @@ public class ClientCrmLeadController {
         return clientCrmLeadService.addClientLeadNote(context, leadId, request);
     }
 
+    /**
+     * POST {@code /api/v1/client-crm/client/leads/{leadId}/follow-up-actions}. Creates client follow up action. Membership is checked before the workspace operation.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @param request input carrying create client CRM follow up action
+     * @param clientSessionToken session credential supplied for the client workspace
+     * @return the client CRM lead response
+     */
     @PostMapping("/client/leads/{leadId}/follow-up-actions")
     public ClientCrmLeadResponse createClientFollowUpAction(
             @PathVariable UUID leadId,
@@ -99,6 +154,15 @@ public class ClientCrmLeadController {
         return clientCrmLeadService.createClientFollowUpAction(context, leadId, request);
     }
 
+    /**
+     * PATCH {@code /api/v1/client-crm/client/leads/{leadId}/follow-up-actions/{actionId}/status}. Updates client follow up action status. Membership is checked before the workspace operation.
+     *
+     * @param leadId identifier of the source sales enquiry
+     * @param actionId identifier of the action
+     * @param request input carrying update client CRM follow up action status
+     * @param clientSessionToken session credential supplied for the client workspace
+     * @return the client CRM lead response
+     */
     @PatchMapping("/client/leads/{leadId}/follow-up-actions/{actionId}/status")
     public ClientCrmLeadResponse updateClientFollowUpActionStatus(
             @PathVariable UUID leadId,
@@ -111,6 +175,14 @@ public class ClientCrmLeadController {
         return clientCrmLeadService.updateClientFollowUpActionStatus(context, leadId, actionId, request);
     }
 
+    /**
+     * GET {@code /api/v1/client-crm/admin/clients/{clientId}/leads}. Lists client leads as admin. Internal access is checked before delegation.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return the client CRM lead response items
+     */
     @GetMapping("/admin/clients/{clientId}/leads")
     public List<ClientCrmLeadResponse> listClientLeadsAsAdmin(
             @PathVariable UUID clientId,
@@ -121,6 +193,16 @@ public class ClientCrmLeadController {
         return clientCrmLeadService.listClientLeadsAsAdmin(clientId);
     }
 
+    /**
+     * PATCH {@code /api/v1/client-crm/admin/clients/{clientId}/leads/{leadId}/status}. Updates client lead status as admin. Internal access is checked before delegation.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param leadId identifier of the source sales enquiry
+     * @param request input carrying update client CRM lead status
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return the client CRM lead response
+     */
     @PatchMapping("/admin/clients/{clientId}/leads/{leadId}/status")
     public ClientCrmLeadResponse updateClientLeadStatusAsAdmin(
             @PathVariable UUID clientId,
@@ -133,6 +215,16 @@ public class ClientCrmLeadController {
         return clientCrmLeadService.updateClientLeadStatusAsAdmin(clientId, leadId, adminUser, request);
     }
 
+    /**
+     * POST {@code /api/v1/client-crm/admin/clients/{clientId}/leads/{leadId}/notes}. Adds client lead note as admin. Internal access is checked before delegation.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param leadId identifier of the source sales enquiry
+     * @param request input carrying add client CRM lead note
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return the client CRM lead response
+     */
     @PostMapping("/admin/clients/{clientId}/leads/{leadId}/notes")
     public ClientCrmLeadResponse addClientLeadNoteAsAdmin(
             @PathVariable UUID clientId,
@@ -145,6 +237,16 @@ public class ClientCrmLeadController {
         return clientCrmLeadService.addClientLeadNoteAsAdmin(clientId, leadId, adminUser, request);
     }
 
+    /**
+     * POST {@code /api/v1/client-crm/admin/clients/{clientId}/leads/{leadId}/follow-up-actions}. Creates follow up action as admin. Internal access is checked before delegation.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param leadId identifier of the source sales enquiry
+     * @param request input carrying create client CRM follow up action
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return the client CRM lead response
+     */
     @PostMapping("/admin/clients/{clientId}/leads/{leadId}/follow-up-actions")
     public ClientCrmLeadResponse createFollowUpActionAsAdmin(
             @PathVariable UUID clientId,
@@ -157,6 +259,17 @@ public class ClientCrmLeadController {
         return clientCrmLeadService.createFollowUpActionAsAdmin(clientId, leadId, adminUser, request);
     }
 
+    /**
+     * PATCH {@code /api/v1/client-crm/admin/clients/{clientId}/leads/{leadId}/follow-up-actions/{actionId}/status}. Updates follow up action status as admin. Internal access is checked before delegation.
+     *
+     * @param clientId identifier of the client whose workspace is in scope
+     * @param leadId identifier of the source sales enquiry
+     * @param actionId identifier of the action
+     * @param request input carrying update client CRM follow up action status
+     * @param internalApiToken credential presented to the internal API boundary
+     * @param adminSessionToken session credential for the internal user
+     * @return the client CRM lead response
+     */
     @PatchMapping("/admin/clients/{clientId}/leads/{leadId}/follow-up-actions/{actionId}/status")
     public ClientCrmLeadResponse updateFollowUpActionStatusAsAdmin(
             @PathVariable UUID clientId,

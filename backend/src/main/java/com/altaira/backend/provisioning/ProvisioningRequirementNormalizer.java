@@ -7,9 +7,20 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * Translates answers from discovery forms into the small set of requirements understood by the planning engine.
+ */
 @Component
 public class ProvisioningRequirementNormalizer {
 
+    /**
+     * Converts discovery answers and selected services into the requirements consumed by the planning rules.
+     *
+     * @param formKey key selecting the discovery questionnaire
+     * @param responses answers supplied in the discovery questionnaire
+     * @param recommendedServices catalogue services proposed after discovery
+     * @return the requirement set
+     */
     public RequirementSet normalize(
             String formKey,
             Map<String, Object> responses,
@@ -32,6 +43,12 @@ public class ProvisioningRequirementNormalizer {
         return requirements;
     }
 
+    /**
+     * Applies web requirements.
+     *
+     * @param requirements requirements
+     * @param responses answers supplied in the discovery questionnaire
+     */
     private void applyWebRequirements(RequirementSet requirements, Map<String, Object> responses) {
         requirements.enable(RequirementSet.FRONTEND);
 
@@ -53,6 +70,12 @@ public class ProvisioningRequirementNormalizer {
         }
     }
 
+    /**
+     * Applies booking requirements.
+     *
+     * @param requirements requirements
+     * @param responses answers supplied in the discovery questionnaire
+     */
     private void applyBookingRequirements(RequirementSet requirements, Map<String, Object> responses) {
         requirements.enable(RequirementSet.BOOKING);
         requirements.enable(RequirementSet.CALENDAR);
@@ -73,6 +96,12 @@ public class ProvisioningRequirementNormalizer {
         }
     }
 
+    /**
+     * Applies CRM requirements.
+     *
+     * @param requirements requirements
+     * @param responses answers supplied in the discovery questionnaire
+     */
     private void applyCrmRequirements(RequirementSet requirements, Map<String, Object> responses) {
         requirements.enable(RequirementSet.CRM);
         requirements.enable(RequirementSet.TRAINING);
@@ -99,6 +128,12 @@ public class ProvisioningRequirementNormalizer {
         }
     }
 
+    /**
+     * Applies automation requirements.
+     *
+     * @param requirements requirements
+     * @param responses answers supplied in the discovery questionnaire
+     */
     private void applyAutomationRequirements(RequirementSet requirements, Map<String, Object> responses) {
         requirements.enable(RequirementSet.AUTOMATION);
 
@@ -121,6 +156,12 @@ public class ProvisioningRequirementNormalizer {
         }
     }
 
+    /**
+     * Applies dashboard requirements.
+     *
+     * @param requirements requirements
+     * @param responses answers supplied in the discovery questionnaire
+     */
     private void applyDashboardRequirements(RequirementSet requirements, Map<String, Object> responses) {
         requirements.enable(RequirementSet.DASHBOARD);
 
@@ -144,6 +185,13 @@ public class ProvisioningRequirementNormalizer {
         }
     }
 
+    /**
+     * Applies general requirements.
+     *
+     * @param requirements requirements
+     * @param responses answers supplied in the discovery questionnaire
+     * @param recommendedServices catalogue services proposed after discovery
+     */
     private void applyGeneralRequirements(
             RequirementSet requirements,
             Map<String, Object> responses,
@@ -177,6 +225,12 @@ public class ProvisioningRequirementNormalizer {
         }
     }
 
+    /**
+     * Applies explicit signals.
+     *
+     * @param requirements requirements
+     * @param responses answers supplied in the discovery questionnaire
+     */
     private void applyExplicitSignals(RequirementSet requirements, Map<String, Object> responses) {
         enableIfYes(requirements, RequirementSet.DATABASE, responses, "dataPersistence", "requiresDatabase");
         enableIfYes(requirements, RequirementSet.BACKEND, responses, "backendRequired", "requiresBackend");
@@ -193,6 +247,11 @@ public class ProvisioningRequirementNormalizer {
         }
     }
 
+    /**
+     * Adds the supporting technical requirements implied by the requested capabilities.
+     *
+     * @param requirements requirements
+     */
     private void deriveTechnicalDependencies(RequirementSet requirements) {
         if (requirements.has(RequirementSet.REALTIME)) {
             requirements.enable(RequirementSet.BACKEND);
@@ -217,6 +276,14 @@ public class ProvisioningRequirementNormalizer {
         }
     }
 
+    /**
+     * Enables a requirement when the corresponding discovery response is affirmative.
+     *
+     * @param requirements requirements
+     * @param requirement requirement
+     * @param responses answers supplied in the discovery questionnaire
+     * @param keys keys
+     */
     private void enableIfYes(
             RequirementSet requirements,
             String requirement,
@@ -228,16 +295,36 @@ public class ProvisioningRequirementNormalizer {
         }
     }
 
+    /**
+     * Checks whether this is yes.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @param keys keys
+     * @return true if the value is yes
+     */
     private boolean isYes(Map<String, Object> responses, String... keys) {
         String raw = value(responses, keys);
         return matches(raw, "yes", "true", "required", "enabled");
     }
 
+    /**
+     * Checks whether there is useful value.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @param keys keys
+     * @return true if the value has useful value
+     */
     private boolean hasUsefulValue(Map<String, Object> responses, String... keys) {
         String raw = value(responses, keys);
         return !raw.isBlank() && !matches(raw, "none", "no", "not_applicable", "unknown");
     }
 
+    /**
+     * Checks whether this is custom booking.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @return true if the value is custom booking
+     */
     private boolean isCustomBooking(Map<String, Object> responses) {
         String bookingType = value(responses, "bookingType");
         String resources = value(responses, "resources");
@@ -249,6 +336,12 @@ public class ProvisioningRequirementNormalizer {
                 || integerValue(responses, "locationCount") > 1;
     }
 
+    /**
+     * Checks whether this is custom automation.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @return true if the value is custom automation
+     */
     private boolean isCustomAutomation(Map<String, Object> responses) {
         int monthlyVolume = integerValue(responses, "monthlyVolume");
         return monthlyVolume >= 5000
@@ -257,6 +350,12 @@ public class ProvisioningRequirementNormalizer {
                 || containsAny(responses, "failureHandling", "compensate");
     }
 
+    /**
+     * Determines whether requires dashboard authentication applies.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @return true when the check succeeds
+     */
     private boolean requiresDashboardAuthentication(Map<String, Object> responses) {
         String source = value(responses, "dataSources");
         String users = value(responses, "users");
@@ -268,6 +367,14 @@ public class ProvisioningRequirementNormalizer {
                 || matches(viewerType, "owner", "internal_team", "clients", "mixed");
     }
 
+    /**
+     * Checks for any.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @param key key used to identify the item
+     * @param fragments fragments
+     * @return true if the value contains any
+     */
     private boolean containsAny(Map<String, Object> responses, String key, String... fragments) {
         String raw = value(responses, key);
         for (String fragment : fragments) {
@@ -278,11 +385,25 @@ public class ProvisioningRequirementNormalizer {
         return false;
     }
 
+    /**
+     * Extracts digits from the discovery field, using zero when there are none.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @param key key used to identify the item
+     * @return the value produced by this operation
+     */
     private int integerValue(Map<String, Object> responses, String key) {
         String raw = value(responses, key).replaceAll("[^0-9]", "");
         return raw.isBlank() ? 0 : Integer.parseInt(raw);
     }
 
+    /**
+     * Reads the first available discovery answer across the supplied keys and handles both scalar and collection responses.
+     *
+     * @param responses answers supplied in the discovery questionnaire
+     * @param keys keys
+     * @return the resulting text
+     */
     private String value(Map<String, Object> responses, String... keys) {
         for (String key : keys) {
             Object raw = responses.get(key);
@@ -309,6 +430,13 @@ public class ProvisioningRequirementNormalizer {
         return "";
     }
 
+    /**
+     * Determines whether matches applies.
+     *
+     * @param value stored or supplied representation
+     * @param candidates candidates
+     * @return true when the check succeeds
+     */
     private boolean matches(String value, String... candidates) {
         for (String candidate : candidates) {
             if (value.equals(normalize(candidate))) {
@@ -318,6 +446,12 @@ public class ProvisioningRequirementNormalizer {
         return false;
     }
 
+    /**
+     * Converts discovery answers and selected services into the requirements consumed by the planning rules.
+     *
+     * @param value stored or supplied representation
+     * @return the resulting text
+     */
     private String normalize(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
